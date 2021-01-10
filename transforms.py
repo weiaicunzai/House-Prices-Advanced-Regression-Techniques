@@ -5,6 +5,7 @@ import numbers
 from collections.abc import Iterable
 import warnings
 import types
+import collections
 
 import cv2
 import numpy as np
@@ -13,6 +14,12 @@ import torch
 import torchvision.transforms.functional as F
 from PIL import Image, ImageEnhance
 
+_cv2_pad_to_str = {
+    'constant': cv2.BORDER_CONSTANT,
+    'edge': cv2.BORDER_REPLICATE,
+    'reflect': cv2.BORDER_REFLECT_101,
+    'symmetric': cv2.BORDER_REFLECT
+}
 
 class Compose:
     """Composes several transforms together.
@@ -60,71 +67,271 @@ class Resize:
 
         return resized_img, resized_mask
 
-class RandomScale:
-    """Randomly scaling an image (from 0.5 to 2.0]), the output image and mask
-    shape will be the same as the input image and mask shape. If the
-    scaled image is larger than the input image, randomly crop the scaled
-    image.If the scaled image is smaller than the input image, pad the scaled
-    image.
-
+def crop(img, i, j, h, w):
+    """Crop the given PIL Image.
     Args:
-        size: expected output size of each edge
-        scale: range of size of the origin size cropped
-        value: value to fill the mask when resizing,
-               should use ignore class index
+        img (numpy ndarray): Image to be cropped.
+        i: Upper pixel coordinate.
+        j: Left pixel coordinate.
+        h: Height of the cropped image.
+        w: Width of the cropped image.
+    Returns:
+        numpy ndarray: Cropped image.
     """
+    if not _is_numpy_image(img):
+        raise TypeError('img should be numpy image. Got {}'.format(type(img)))
 
-    def __init__(self, scale=(0.5, 2.0), value=0):
+    if len(img.shape) == 3:
+        return img[i:i + h, j:j + w, :]
+    if len(img.shape) == 2:
+        return img[i:i + h, j:j + w]
 
-        if not isinstance(scale, Iterable) and len(scale) == 2:
-            raise TypeError('scale should be iterable with size 2 or int')
+def center_crop(img, output_size):
+    if isinstance(output_size, numbers.Number):
+        output_size = (int(output_size), int(output_size))
+    h, w = img.shape[0:2]
+    th, tw = output_size
+    i = int(round((h - th) / 2.))
+    j = int(round((w - tw) / 2.))
+    return crop(img, i, j, th, tw)
 
-        self.value = value
-        self.scale = scale
+def pad(img, padding, fill=0, padding_mode='constant'):
+    r"""Pad the given numpy ndarray on all sides with specified padding mode and fill value.
+    Args:
+        img (numpy ndarray): image to be padded.
+        padding (int or tuple): Padding on each border. If a single int is provided this
+            is used to pad all borders. If tuple of length 2 is provided this is the padding
+            on left/right and top/bottom respectively. If a tuple of length 4 is provided
+            this is the padding for the left, top, right and bottom borders
+            respectively.
+        fill: Pixel fill value for constant fill. Default is 0. If a tuple of
+            length 3, it is used to fill R, G, B channels respectively.
+            This value is only used when the padding_mode is constant
+        padding_mode: Type of padding. Should be: constant, edge, reflect or symmetric. Default is constant.
+            - constant: pads with a constant value, this value is specified with fill
+            - edge: pads with the last value on the edge of the image
+            - reflect: pads with reflection of image (without repeating the last value on the edge)
+                       padding [1, 2, 3, 4] with 2 elements on both sides in reflect mode
+                       will result in [3, 2, 1, 2, 3, 4, 3, 2]
+            - symmetric: pads with reflection of image (repeating the last value on the edge)
+                         padding [1, 2, 3, 4] with 2 elements on both sides in symmetric mode
+                         will result in [2, 1, 1, 2, 3, 4, 4, 3]
+    Returns:
+        Numpy image: padded image.
+    """
+    if not _is_numpy_image(img):
+        raise TypeError('img should be numpy ndarray. Got {}'.format(
+            type(img)))
+    if not isinstance(padding, (numbers.Number, tuple, list)):
+        raise TypeError('Got inappropriate padding arg')
+    if not isinstance(fill, (numbers.Number, str, tuple)):
+        raise TypeError('Got inappropriate fill arg')
+    if not isinstance(padding_mode, str):
+        raise TypeError('Got inappropriate padding_mode arg')
+    if isinstance(padding,
+                  collections.Sequence) and len(padding) not in [2, 4]:
+        raise ValueError(
+            "Padding must be an int or a 2, or 4 element tuple, not a " +
+            "{} element tuple".format(len(padding)))
+
+    assert padding_mode in ['constant', 'edge', 'reflect', 'symmetric'], \
+        'Padding mode should be either constant, edge, reflect or symmetric'
+
+    if isinstance(padding, int):
+        pad_left = pad_right = pad_top = pad_bottom = padding
+    if isinstance(padding, collections.Sequence) and len(padding) == 2:
+        pad_left = pad_right = padding[0]
+        pad_top = pad_bottom = padding[1]
+    if isinstance(padding, collections.Sequence) and len(padding) == 4:
+        pad_left = padding[0]
+        pad_top = padding[1]
+        pad_right = padding[2]
+        pad_bottom = padding[3]
+    #if len(img.shape) == 2:
+    #    return cv2.copyMakeBorder(img,
+    #                               top=pad_top,
+    #                               bottom=pad_bottom,
+    #                               left=pad_left,
+    #                               right=pad_right,
+    #                               borderType=_cv2_pad_to_str[padding_mode],
+    #                               value=fill)[:, :, np.newaxis]
+    #else:
+    return cv2.copyMakeBorder(img,
+                              top=pad_top,
+                              bottom=pad_bottom,
+                              left=pad_left,
+                              right=pad_right,
+                              borderType=_cv2_pad_to_str[padding_mode],
+                              value=fill)
+
+class RandomCrop(object):
+    """Crop the given numpy ndarray at a random location.
+    Args:
+        size (sequence or int): Desired output size of the crop. If size is an
+            int instead of sequence like (h, w), a square crop (size, size) is
+            made.
+        padding (int or sequence, optional): Optional padding on each border
+            of the image. Default is None, i.e no padding. If a sequence of length
+            4 is provided, it is used to pad left, top, right, bottom borders
+            respectively. If a sequence of length 2 is provided, it is used to
+            pad left/right, top/bottom borders, respectively.
+        pad_if_needed (boolean): It will pad the image if smaller than the
+            desired size to avoid raising an exception.
+        fill: Pixel fill value for constant fill. Default is 0. If a tuple of
+            length 3, it is used to fill R, G, B channels respectively.
+            This value is only used when the padding_mode is constant
+        padding_mode: Type of padding. Should be: constant, edge, reflect or symmetric. Default is constant.
+             - constant: pads with a constant value, this value is specified with fill
+             - edge: pads with the last value on the edge of the image
+             - reflect: pads with reflection of image (without repeating the last value on the edge)
+                padding [1, 2, 3, 4] with 2 elements on both sides in reflect mode
+                will result in [3, 2, 1, 2, 3, 4, 3, 2]
+             - symmetric: pads with reflection of image (repeating the last value on the edge)
+                padding [1, 2, 3, 4] with 2 elements on both sides in symmetric mode
+                will result in [2, 1, 1, 2, 3, 4, 4, 3]
+    """
+    def __init__(self,
+                 size,
+                 padding=None,
+                 pad_if_needed=False,
+                 fill=0,
+                 padding_mode='constant'):
+        if isinstance(size, numbers.Number):
+            self.size = (int(size), int(size))
+        else:
+            self.size = size
+        self.padding = padding
+        self.pad_if_needed = pad_if_needed
+        self.fill = fill
+        self.padding_mode = padding_mode
+
+    @staticmethod
+    def get_params(img, output_size):
+        """Get parameters for ``crop`` for a random crop.
+        Args:
+            img (numpy ndarray): Image to be cropped.
+            output_size (tuple): Expected output size of the crop.
+        Returns:
+            tuple: params (i, j, h, w) to be passed to ``crop`` for random crop.
+        """
+        h, w = img.shape[:2]
+        th, tw = output_size
+        if w == tw and h == th:
+            return 0, 0, h, w
+
+        i = random.randint(0, h - th)
+        j = random.randint(0, w - tw)
+        return i, j, th, tw
 
     def __call__(self, img, mask):
-        oh, ow = img.shape[:2]
+        """
+        Args:
+            img (numpy ndarray): Image to be cropped.
+        Returns:
+            numpy ndarray: Cropped image.
+        """
+        if self.padding is not None:
+            img = pad(img, self.padding, self.fill, self.padding_mode)
+            mask = pad(mask, self.padding, self.fill, self.padding_mode)
 
-        # scale image
-        scale = random.uniform(*self.scale)
-        img = cv2.resize(img, (0, 0), fx=scale, fy=scale)
-        mask = cv2.resize(mask, (0, 0), fx=scale, fy=scale,
-                          interpolation=cv2.INTER_NEAREST)
+        # pad the width if needed
+        if self.pad_if_needed and img.shape[1] < self.size[1]:
+            left_pad = int((self.size[1] - img.shape[1]) / 2)
+            right_pad = self.size[1] - img.shape[1] - left_pad
+            #img = pad(img, (self.size[1] - img.shape[1], 0), self.fill,
+            #            self.padding_mode)
+            img = pad(img, (left_pad, 0, right_pad, 0), self.fill,
+                        self.padding_mode)
+            #mask = pad(mask, (self.size[1] - mask.shape[1], 0), self.fill,
+            #            self.padding_mode)
+            mask = pad(mask, (left_pad, 0, right_pad, 0), self.fill,
+                        self.padding_mode)
+        # pad the height if needed
+        if self.pad_if_needed and img.shape[0] < self.size[0]:
+            top_pad = int((self.size[0] - img.shape[0]) / 2)
+            bot_pad = self.size[0] - img.shape[0] - top_pad
+            #img = pad(img, (0, self.size[0] - img.shape[0]), self.fill,
+            #            self.padding_mode)
+            #mask = pad(mask, (0, self.size[0] - mask.shape[0]), self.fill,
+            #            self.padding_mode)
+            img = pad(img, (0, top_pad, 0, bot_pad), self.fill,
+                        self.padding_mode)
+            mask = pad(mask, (0, top_pad, 0, bot_pad), self.fill,
+                        self.padding_mode)
 
-        h, w = img.shape[:2]
+        i, j, h, w = self.get_params(img, self.size)
 
-        # pad image and mask
-        diff_h = max(0, oh - h)
-        diff_w = max(0, ow - w)
+        return crop(img, i, j, h, w), crop(mask, i, j, h, w)
 
-        img = cv2.copyMakeBorder(
-            img,
-            diff_h // 2,
-            diff_h - diff_h // 2,
-            diff_w // 2,
-            diff_w - diff_w // 2,
-            cv2.BORDER_CONSTANT,
-            value=[0, 0, 0]
-        )
-        mask = cv2.copyMakeBorder(
-            mask,
-            diff_h // 2,
-            diff_h - diff_h // 2,
-            diff_w // 2,
-            diff_w - diff_w // 2,
-            cv2.BORDER_CONSTANT,
-            value=self.value
-        )
+    def __repr__(self):
+        return self.__class__.__name__ + '(size={0}, padding={1})'.format(
+            self.size, self.padding)
 
-        h, w = img.shape[:2]
-
-        # crop image and mask
-        y1 = random.randint(0, h - oh)
-        x1 = random.randint(0, w - ow)
-        img = img[y1: y1 + oh, x1: x1 + ow]
-        mask = mask[y1: y1 + oh, x1: x1 + ow]
-
-        return img, mask
+#class RandomScale:
+#    """Randomly scaling an image (from 0.5 to 2.0]), the output image and mask
+#    shape will be the same as the input image and mask shape. If the
+#    scaled image is larger than the input image, randomly crop the scaled
+#    image.If the scaled image is smaller than the input image, pad the scaled
+#    image.
+#
+#    Args:
+#        size: expected output size of each edge
+#        scale: range of size of the origin size cropped
+#        value: value to fill the mask when resizing,
+#               should use ignore class index
+#    """
+#
+#    def __init__(self, scale=(0.5, 2.0), value=0):
+#
+#        if not isinstance(scale, Iterable) and len(scale) == 2:
+#            raise TypeError('scale should be iterable with size 2 or int')
+#
+#        self.value = value
+#        self.scale = scale
+#
+#    def __call__(self, img, mask):
+#        oh, ow = img.shape[:2]
+#
+#        # scale image
+#        scale = random.uniform(*self.scale)
+#        img = cv2.resize(img, (0, 0), fx=scale, fy=scale)
+#        mask = cv2.resize(mask, (0, 0), fx=scale, fy=scale,
+#                          interpolation=cv2.INTER_NEAREST)
+#
+#        h, w = img.shape[:2]
+#
+#        # pad image and mask
+#        diff_h = max(0, oh - h)
+#        diff_w = max(0, ow - w)
+#
+#        img = cv2.copyMakeBorder(
+#            img,
+#            diff_h // 2,
+#            diff_h - diff_h // 2,
+#            diff_w // 2,
+#            diff_w - diff_w // 2,
+#            cv2.BORDER_CONSTANT,
+#            value=[0, 0, 0]
+#        )
+#        mask = cv2.copyMakeBorder(
+#            mask,
+#            diff_h // 2,
+#            diff_h - diff_h // 2,
+#            diff_w // 2,
+#            diff_w - diff_w // 2,
+#            cv2.BORDER_CONSTANT,
+#            value=self.value
+#        )
+#
+#        h, w = img.shape[:2]
+#
+#        # crop image and mask
+#        y1 = random.randint(0, h - oh)
+#        x1 = random.randint(0, w - ow)
+#        img = img[y1: y1 + oh, x1: x1 + ow]
+#        mask = mask[y1: y1 + oh, x1: x1 + ow]
+#
+#        return img, mask
 
 class RandomRotation:
     """Rotate the image by angle
@@ -146,7 +353,7 @@ class RandomRotation:
         self.p = p
 
     def __call__(self, image, mask):
-        if random.random() < self.p:
+        if random.random() > self.p:
             return image, mask
 
         angle = random.uniform(-self.angle, self.angle)
@@ -162,6 +369,29 @@ class RandomRotation:
         )
 
         return image, mask
+
+class RandomVerticalFlip:
+    """Horizontally flip the given opencv image with given probability p.
+    and does the same to mask
+
+    Args:
+        p: probability of the image being flipped
+    """
+    def __init__(self, p=0.5):
+        self.p = p
+
+    def __call__(self, img, mask):
+        """
+        Args:
+            the image to be flipped
+        Returns:
+            flipped image
+        """
+        if random.random() < self.p:
+            img = cv2.flip(img, 0)
+            mask = cv2.flip(mask, 0)
+
+        return img, mask
 
 class RandomHorizontalFlip:
     """Horizontally flip the given opencv image with given probability p.
@@ -537,3 +767,166 @@ class Normalize:
         img.sub_(mean[:, None, None]).div_(std[:, None, None])
 
         return img, mask
+
+
+class RandomScaleCrop:
+    """Randomly scaling an image (from 0.5 to 2.0]), the output image and mask
+    shape will be the same as the input image and mask shape. If the
+    scaled image is larger than the input image, randomly crop the scaled
+    image.If the scaled image is smaller than the input image, pad the scaled
+    image.
+
+    Args:
+        size: expected output size of each edge
+        scale: range of size of the origin size cropped
+        value: value to fill the mask when resizing,
+               should use ignore class index
+    """
+
+    def __init__(self, crop_size, scale=(0.5, 2.0), value=0, padding_mode='constant'):
+
+        if not isinstance(scale, Iterable) and len(scale) == 2:
+            raise TypeError('scale should be iterable with size 2 or int')
+
+        self.fill = value
+        self.scale = scale
+        self.crop_size = crop_size
+        self.padding_mode = padding_mode
+
+    @staticmethod
+    def get_params(img, output_size):
+        """Get parameters for ``crop`` for a random crop.
+        Args:
+            img (numpy ndarray): Image to be cropped.
+            output_size (tuple): Expected output size of the crop.
+        Returns:
+            tuple: params (i, j, h, w) to be passed to ``crop`` for random crop.
+        """
+        h, w = img.shape[:2]
+        th, tw = output_size
+        if w == tw and h == th:
+            return 0, 0, h, w
+
+        i = random.randint(0, h - th)
+        j = random.randint(0, w - tw)
+        return i, j, th, tw
+
+    def __call__(self, img, mask):
+
+        scale = random.uniform(self.scale[0], self.scale[1])
+
+        crop_size = int(self.crop_size / scale)
+
+        if img.shape[1] < crop_size:
+            left_pad = int((crop_size - img.shape[1]) / 2)
+            right_pad = crop_size - img.shape[1] - left_pad
+            img = pad(img, (left_pad, 0, right_pad, 0), 0,
+                        self.padding_mode)
+            mask = pad(mask, (left_pad, 0, right_pad, 0), self.fill,
+                        self.padding_mode)
+        # pad the height if needed
+        if img.shape[0] < crop_size:
+            top_pad = int((crop_size - img.shape[0]) / 2)
+            bot_pad = crop_size - img.shape[0] - top_pad
+            img = pad(img, (0, top_pad, 0, bot_pad), 0,
+                        self.padding_mode)
+            mask = pad(mask, (0, top_pad, 0, bot_pad), self.fill,
+                        self.padding_mode)
+
+        i, j, h, w = self.get_params(img, (crop_size, crop_size))
+        img = crop(img, i, j, h, w)
+        mask = crop(mask, i, j, h, w)
+
+        img = cv2.resize(img, (self.crop_size, self.crop_size))
+        mask = cv2.resize(mask, (self.crop_size, self.crop_size), interpolation=cv2.INTER_NEAREST)
+
+
+        return img, mask
+
+#from dataset.camvid import CamVid
+#
+#
+#train_dataset = CamVid(
+#        'data',
+#        image_set='train'
+#)
+#
+#transform = RandomScaleCrop(473)
+#
+#train_dataset.transforms = transform
+#
+#import cv2
+#import time
+#start = time.time()
+#for i in range(100):
+#    img, mask = train_dataset[i]
+#
+#finish = time.time()
+#print(100 // (finish - start))
+#
+#    #cv2.imwrite('test/img{}.png'.format(i), img)
+#    #cv2.imwrite('test/mask{}.png'.format(i), mask / mask.max() * 255)
+#
+#
+#
+
+#img = cv2.imread('/data/by/datasets/original/Warwick QU Dataset (Released 2016_07_08)/testB_17.bmp')
+##img = cv2.imread('/data/by/pytorch-camvid/data/camvid/images/0001TP_006870.png')
+##img = cv2.resize(img, (0, 0), fx=0.1, fy=0.1)
+#print(img.shape)
+#mask = np.random.randint(0, 2, size=img.shape[:2])
+#print(mask.shape)
+#trans = RandomScaleCrop(473)
+#trans = RandomRotation(p=1)
+#trans = Resize(100)
+
+
+
+# Glas transforms
+#train_transforms = Compose([
+#            #transforms.Resize(settings.IMAGE_SIZE),
+#            RandomVerticalFlip(),
+#            RandomHorizontalFlip(),
+#            RandomRotation(45, fill=11),
+#            RandomScaleCrop(473),
+#            RandomGaussianBlur(),
+#            RandomHorizontalFlip(),
+#            ColorJitter(0.4, 0.4),
+#            #ToTensor(),
+#            #Normalize(settings.MEAN, settings.STD),
+#])
+
+
+#import time
+#start = time.time()
+#for i in range(10):
+#    ig, m = trans(img, mask)
+#    #cv2.imwrite('test/{}.jpg'.format(i), ig)
+#
+#finish = time.time()
+#print(finish - start)
+
+class CenterCrop(object):
+    """Crops the given numpy ndarray at the center.
+    Args:
+        size (sequence or int): Desired output size of the crop. If size is an
+            int instead of sequence like (h, w), a square crop (size, size) is
+            made.
+    """
+    def __init__(self, size):
+        if isinstance(size, numbers.Number):
+            self.size = (int(size), int(size))
+        else:
+            self.size = size
+
+    def __call__(self, img, mask):
+        """
+        Args:
+            img (numpy ndarray): Image to be cropped.
+        Returns:
+            numpy ndarray: Cropped image.
+        """
+        return center_crop(img, self.size), center_crop(mask, self.size)
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(size={0})'.format(self.size)
