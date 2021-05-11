@@ -1,4 +1,6 @@
+import os
 import argparse
+import re
 
 import torch
 import torch.nn as nn
@@ -21,31 +23,59 @@ if __name__ == '__main__':
     parser.add_argument('-weight', type=str, required=True,
                         help='weight file path')
     parser.add_argument('-dataset', type=str, default='Camvid', help='dataset name')
-    parser.add_argument('-net', type=str, required=True, help='if resume training')
+    parser.add_argument('-net', type=str, required=True, help='network name')
     parser.add_argument('-download', action='store_true', default=False)
     parser.add_argument('-b', type=int, default=1,
                         help='batch size for dataloader')
+    parser.add_argument('-pretrain', action='store_true', default=False, help='pretrain data')
+    parser.add_argument('-branch', type=str, default='hybird', help='dataset name')
+
     args = parser.parse_args()
+    print(args)
 
-    test_dataloader = utils.data_loader(args, 'test')
-    test_dataset = test_dataloader.dataset
-    net = utils.get_model(args.net, 3, test_dataset.class_num)
-    net.load_state_dict(torch.load(args.weight))
+    #m = re.search(r'[a-zA-Z]+_[0-9]+_[a-zA-z]+_[0-9]+h_[0-9]+m_[0-9]s','Thursday_21_January_2021_09h_24m_07s')
+    #m = re.search(r'[a-zA-Z]+_[0-9]+_[a-zA-Z]+_[0-9]+h_[0-9]+m','Thursday_21_January_2021_09h_24m_07s')
+    #print(m.group())
+    checkpoint = os.path.basename(os.path.dirname(args.weight))
 
-    net = net.cuda()
-    net.eval()
+    if args.dataset == 'Glas':
+        test_dataloader = utils.data_loader(args, 'testA')
+        test_dataset = test_dataloader.dataset
+        print(test_dataset, test_dataset.class_num, test_dataset.transforms)
+        net = utils.get_model(args.net, 3, test_dataset.class_num, args=args)
+        net.load_state_dict(torch.load(args.weight))
+        net = net.cuda()
+        print(args.weight)
+        net.eval()
+        print('Glas testA')
+        with torch.no_grad():
+            utils.test(
+                net,
+                test_dataloader,
+                settings.IMAGE_SIZE,
+                settings.SCALES,
+                settings.BASE_SIZE,
+                test_dataset.class_num,
+                settings.MEAN,
+                settings.STD,
+                checkpoint
+            )
 
-    with torch.no_grad():
-        utils.test(
-            net,
-            test_dataloader,
-            settings.IMAGE_SIZE,
-            settings.SCALES,
-            settings.BASE_SIZE,
-            test_dataset.class_num,
-            settings.MEAN,
-            settings.STD
-        )
+        test_dataloader = utils.data_loader(args, 'testB')
+        test_dataset = test_dataloader.dataset
+        print('Glas testB')
+        with torch.no_grad():
+            utils.test(
+                net,
+                test_dataloader,
+                settings.IMAGE_SIZE,
+                settings.SCALES,
+                settings.BASE_SIZE,
+                test_dataset.class_num,
+                settings.MEAN,
+                settings.STD,
+                checkpoint
+            )
 
         #utils.test(
         #    net,

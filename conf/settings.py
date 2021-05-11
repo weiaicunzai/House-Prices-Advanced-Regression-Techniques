@@ -16,15 +16,19 @@ DATE_FORMAT = '%A_%d_%B_%Y_%Hh_%Mm_%Ss'
 TIME_NOW = datetime.now().strftime(DATE_FORMAT)
 
 #save weights file per SAVE_EPOCH epoch
-SAVE_EPOCH = 20
+SAVE_EPOCH = 1000
 
 DATA_PATH = '/content/drive/My Drive/dataset/camvid'
 
 #IMAGE_SIZE = (480, 360)
 IMAGE_SIZE = 473
 BASE_SIZE = 512
+#IMAGE_SIZE = 128
+#BASE_SIZE = 138
 
 MILESTONES = [100, 150]
 SCALES = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75]
 
 IGNORE_LABEL = 255
+
+EVAL_PATH = 'result'

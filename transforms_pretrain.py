@@ -30,12 +30,12 @@ class Compose:
     def __init__(self, transforms):
         self.transforms = transforms
 
-    def __call__(self, img, mask):
+    def __call__(self, img):
 
         for trans in self.transforms:
-            img, mask = trans(img, mask)
+            img = trans(img)
 
-        return img, mask
+        return img
 
     def __repr__(self):
         format_string = self.__class__.__name__ + '('
@@ -361,23 +361,23 @@ class RandomRotation:
         self.value = fill
         self.p = p
 
-    def __call__(self, image, mask):
+    def __call__(self, image):
         if random.random() > self.p:
-            return image, mask
+            return image
 
         angle = random.uniform(-self.angle, self.angle)
         image_center = tuple(np.array(image.shape[1::-1]) / 2)
         rot_mat = cv2.getRotationMatrix2D(image_center, angle, 1.0)
         image = cv2.warpAffine(
             image, rot_mat, image.shape[1::-1])
-        mask = cv2.warpAffine(
-            mask, rot_mat, mask.shape[1::-1],
-            flags=cv2.INTER_NEAREST,
-            borderMode=cv2.BORDER_CONSTANT,
-            borderValue=self.value
-        )
+        #mask = cv2.warpAffine(
+        #    mask, rot_mat, mask.shape[1::-1],
+        #    flags=cv2.INTER_NEAREST,
+        #    borderMode=cv2.BORDER_CONSTANT,
+        #    borderValue=self.value
+        #)
 
-        return image, mask
+        return image
 
 class RandomVerticalFlip:
     """Horizontally flip the given opencv image with given probability p.
@@ -389,7 +389,7 @@ class RandomVerticalFlip:
     def __init__(self, p=0.5):
         self.p = p
 
-    def __call__(self, img, mask):
+    def __call__(self, img):
         """
         Args:
             the image to be flipped
@@ -398,9 +398,8 @@ class RandomVerticalFlip:
         """
         if random.random() < self.p:
             img = cv2.flip(img, 0)
-            mask = cv2.flip(mask, 0)
 
-        return img, mask
+        return img
 
 class RandomHorizontalFlip:
     """Horizontally flip the given opencv image with given probability p.
@@ -412,7 +411,7 @@ class RandomHorizontalFlip:
     def __init__(self, p=0.5):
         self.p = p
 
-    def __call__(self, img, mask):
+    def __call__(self, img):
         """
         Args:
             the image to be flipped
@@ -421,9 +420,8 @@ class RandomHorizontalFlip:
         """
         if random.random() < self.p:
             img = cv2.flip(img, 1)
-            mask = cv2.flip(mask, 1)
 
-        return img, mask
+        return img
 
 class RandomGaussianBlur:
     """Blur an image using gaussian blurring.
@@ -449,7 +447,7 @@ class RandomGaussianBlur:
         self.sigma = sigma
         self.p = p
 
-    def __call__(self, img, mask):
+    def __call__(self, img):
 
         if random.random() < self.p:
             sigma = random.uniform(*self.sigma)
@@ -457,7 +455,7 @@ class RandomGaussianBlur:
             img = cv2.GaussianBlur(img, (k_size, k_size),
                                    sigmaX=sigma, sigmaY=sigma)
 
-        return img, mask
+        return img
 
     @staticmethod
     def _compute_gaussian_blur_ksize(sigma):
@@ -549,7 +547,6 @@ def adjust_saturation(img, saturation_factor):
             give a black and white image, 1 will give the original image while
             2 will enhance the saturation by a factor of 2.
     Returns:
-        numpy ndarray: Saturation adjusted image.
     """
     # ~10ms slower than PIL!
     if not _is_numpy_image(img):
@@ -594,8 +591,8 @@ class Lambda(object):
         assert isinstance(lambd, types.LambdaType)
         self.lambd = lambd
 
-    def __call__(self, img, mask):
-        return self.lambd(img), mask
+    def __call__(self, img):
+        return self.lambd(img)
 
     def __repr__(self):
         return self.__class__.__name__ + '()'
@@ -699,7 +696,7 @@ class ColorJitter(object):
 
         return transform
 
-    def __call__(self, img, mask):
+    def __call__(self, img, mask=None):
         """
         Args:
             img (numpy ndarray): Input image.
@@ -707,11 +704,15 @@ class ColorJitter(object):
             numpy ndarray: Color jittered image.
         """
         if random.random() < self.p:
-            return img, mask
+            return img
 
         transform = self.get_params(self.brightness, self.contrast,
                                     self.saturation, self.hue)
-        return transform(img, mask)
+        if mask is None:
+            return transform(img)
+
+        return transform(img), mask
+
 
     def __repr__(self):
         format_string = self.__class__.__name__ + '('
@@ -726,7 +727,7 @@ class ToTensor:
     float tensor (c, h, w) ranged from 0 to 1, and convert mask to torch tensor
     """
 
-    def __call__(self, img, mask):
+    def __call__(self, img, mask=None):
         """
         Args:
             a numpy array (h, w, c) range from [0, 255]
@@ -739,9 +740,11 @@ class ToTensor:
         img = torch.from_numpy(img)
         img = img.float() / 255.0
 
-        mask = torch.from_numpy(mask).long()
+        #if mask is None:
+        return img
 
-        return img, mask
+        #mask = torch.from_numpy(img)
+        #return img, mask.long()
 
 class Normalize:
     """Normalize a torch tensor (H, W, BGR order) with mean and standard deviation
@@ -759,7 +762,7 @@ class Normalize:
         self.std = std
         self.inplace = inplace
 
-    def __call__(self, img, mask):
+    def __call__(self, img):
         """
         Args:
             (H W C) format numpy array range from [0, 255]
@@ -775,7 +778,7 @@ class Normalize:
         std = torch.tensor(self.std, dtype=torch.float32)
         img.sub_(mean[:, None, None]).div_(std[:, None, None])
 
-        return img, mask
+        return img
 
 
 class EncodingLable:
@@ -828,7 +831,7 @@ class RandomScaleCrop:
         j = random.randint(0, w - tw)
         return i, j, th, tw
 
-    def __call__(self, img, mask):
+    def __call__(self, img):
 
         scale = random.uniform(self.scale[0], self.scale[1])
 
@@ -839,26 +842,27 @@ class RandomScaleCrop:
             right_pad = crop_size - img.shape[1] - left_pad
             img = pad(img, (left_pad, 0, right_pad, 0), 0,
                         self.padding_mode)
-            mask = pad(mask, (left_pad, 0, right_pad, 0), self.fill,
-                        self.padding_mode)
+            #mask = pad(mask, (left_pad, 0, right_pad, 0), self.fill,
+            #            self.padding_mode)
         # pad the height if needed
         if img.shape[0] < crop_size:
             top_pad = int((crop_size - img.shape[0]) / 2)
             bot_pad = crop_size - img.shape[0] - top_pad
             img = pad(img, (0, top_pad, 0, bot_pad), 0,
                         self.padding_mode)
-            mask = pad(mask, (0, top_pad, 0, bot_pad), self.fill,
-                        self.padding_mode)
+            #mask = pad(mask, (0, top_pad, 0, bot_pad), self.fill,
+            #            self.padding_mode)
 
         i, j, h, w = self.get_params(img, (crop_size, crop_size))
         img = crop(img, i, j, h, w)
-        mask = crop(mask, i, j, h, w)
+        #mask = crop(mask, i, j, h, w)
 
         img = cv2.resize(img, (self.crop_size, self.crop_size))
-        mask = cv2.resize(mask, (self.crop_size, self.crop_size), interpolation=cv2.INTER_NEAREST)
+        #mask = cv2.resize(mask, (self.crop_size, self.crop_size), interpolation=cv2.INTER_NEAREST)
+        #if hook:
+        #    hook(img)
 
-
-        return img, mask
+        return img
 
 #from dataset.camvid import CamVid
 #

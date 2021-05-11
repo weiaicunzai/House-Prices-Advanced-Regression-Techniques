@@ -8,11 +8,13 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import cv2
+import skimage.morphology as morph
+
 
 import transforms
-from dataset import CamVid, VOC2012Aug
+from dataset import CamVid, VOC2012Aug, Glas, PreTraining
 from conf import settings
-from metric import eval_metrics
+from metric import eval_metrics, gland_accuracy_object_level
 
 
 
@@ -60,46 +62,74 @@ def compute_mean_and_std(dataset):
     """Compute dataset mean and std, and normalize it
     Args:
         dataset: instance of torch.nn.Dataset
-
     Returns:
         return: mean and std of this dataset
     """
 
-    mean_r = 0
-    mean_g = 0
-    mean_b = 0
-
-    #opencv BGR channel
-    for img, _ in dataset:
-        mean_b += np.mean(img[:, :, 0])
-        mean_g += np.mean(img[:, :, 1])
-        mean_r += np.mean(img[:, :, 2])
-
-    mean_b /= len(dataset)
-    mean_g /= len(dataset)
-    mean_r /= len(dataset)
-
-    diff_r = 0
-    diff_g = 0
-    diff_b = 0
-
-    N = 0
+    mean = 0
+    std = 0
 
     for img, _ in dataset:
+        mean += np.mean(img, axis=(0, 1))
 
-        diff_b += np.sum(np.power(img[:, :, 0] - mean_b, 2))
-        diff_g += np.sum(np.power(img[:, :, 1] - mean_g, 2))
-        diff_r += np.sum(np.power(img[:, :, 2] - mean_r, 2))
+    mean /= len(dataset)
 
-        N += np.prod(img[:, :, 0].shape)
+    diff = 0
+    for img, _ in dataset:
 
-    std_b = np.sqrt(diff_b / N)
-    std_g = np.sqrt(diff_g / N)
-    std_r = np.sqrt(diff_r / N)
+        diff += np.sum(np.power(img - mean, 2), axis=(0, 1))
 
-    mean = (mean_b.item() / 255.0, mean_g.item() / 255.0, mean_r.item() / 255.0)
-    std = (std_b.item() / 255.0, std_g.item() / 255.0, std_r.item() / 255.0)
+    N = len(dataset) * np.prod(img.shape[:2])
+    std = np.sqrt(diff / N)
+
+    mean = mean / 255
+    std = std / 255
+
     return mean, std
+#def compute_mean_and_std(dataset):
+#    """Compute dataset mean and std, and normalize it
+#    Args:
+#        dataset: instance of torch.nn.Dataset
+#
+#    Returns:
+#        return: mean and std of this dataset
+#    """
+#
+#    mean_r = 0
+#    mean_g = 0
+#    mean_b = 0
+#
+#    #opencv BGR channel
+#    for img, _ in dataset:
+#        mean_b += np.mean(img[:, :, 0])
+#        mean_g += np.mean(img[:, :, 1])
+#        mean_r += np.mean(img[:, :, 2])
+#
+#    mean_b /= len(dataset)
+#    mean_g /= len(dataset)
+#    mean_r /= len(dataset)
+#
+#    diff_r = 0
+#    diff_g = 0
+#    diff_b = 0
+#
+#    N = 0
+#
+#    for img, _ in dataset:
+#
+#        diff_b += np.sum(np.power(img[:, :, 0] - mean_b, 2))
+#        diff_g += np.sum(np.power(img[:, :, 1] - mean_g, 2))
+#        diff_r += np.sum(np.power(img[:, :, 2] - mean_r, 2))
+#
+#        N += np.prod(img[:, :, 0].shape)
+#
+#    std_b = np.sqrt(diff_b / N)
+#    std_g = np.sqrt(diff_g / N)
+#    std_r = np.sqrt(diff_r / N)
+#
+#    mean = (mean_b.item() / 255.0, mean_g.item() / 255.0, mean_r.item() / 255.0)
+#    std = (std_b.item() / 255.0, std_g.item() / 255.0, std_r.item() / 255.0)
+#    return mean, std
 
 def get_weight_path(checkpoint_path):
     """return absolute path of the best performance
@@ -153,7 +183,7 @@ def get_weight_path(checkpoint_path):
     else:
         return ''
 
-def get_model(model_name, input_channels, class_num):
+def get_model(model_name, input_channels, class_num, args=None):
 
     if model_name == 'unet':
         from models.unet import UNet
@@ -168,6 +198,25 @@ def get_model(model_name, input_channels, class_num):
         from models.deeplabv3plus_tmp import deeplab as deeplabv3plus
         net = deeplabv3plus(class_num)
 
+    elif model_name == 'transunet':
+        from models.networks.vit_seg_modeling import transunet
+        #net = transunet(settings.IMAGE_SIZE, class_num)
+        net = transunet(settings.IMAGE_SIZE, class_num)
+    elif model_name == 'medt':
+        from models.lib.models.axialnet import gated
+        net = gated(img_size=128, imgchan=3)
+    elif model_name == 'hybird':
+        from models.axial_attention import unet_axial
+        net = unet_axial(class_num, args.branch)
+
+    elif model_name == 'axialunet':
+        from models.axial_unet import axialunet
+        net = axialunet(settings.IMAGE_SIZE)
+
+    elif model_name == 'transseg':
+        from models.one.transformer import transseg
+        #print(class_num)
+        net = transseg(class_num, segment=not args.pretrain)
     else:
         raise ValueError('network type does not supported')
 
@@ -278,7 +327,7 @@ def plot_dataset(dataset, out_dir, class_num, num=9, class_id=4, ignore_idx=255)
 
         label = label
         ignore_mask = label == ignore_idx
-        print(ignore_idx)
+        #print(ignore_idx)
         #if 0 != class_id:
         #    label[ignore_mask] = 0
         #else:
@@ -310,8 +359,57 @@ def print_eval(class_names, results):
 
     print(msg)
 
+def pretrain_training_transforms():
+    import transforms_pretrain
+    trans = transforms_pretrain.Compose([
+            #transforms_pretrain.EncodingLable(),
+            transforms_pretrain.RandomHorizontalFlip(),
+            transforms_pretrain.RandomVerticalFlip(),
+            transforms_pretrain.RandomRotation(15, fill=0),
+            transforms_pretrain.ColorJitter(0.4, 0.4),
+            transforms_pretrain.RandomGaussianBlur(),
+            transforms_pretrain.RandomScaleCrop(settings.IMAGE_SIZE),
+            transforms_pretrain.ToTensor(),
+            transforms_pretrain.Normalize(settings.MEAN, settings.STD),
+        ])
+
+    return trans
+
+def pretrain_test_transforms():
+    import transforms_pretrain
+    trans = transforms_pretrain.Compose([
+            #transforms_pretrain.EncodingLable(),
+            #transforms_pretrain.RandomHorizontalFlip(),
+            #transforms_pretrain.RandomVerticalFlip(),
+            #transforms_pretrain.RandomRotation(15, fill=0),
+            #transforms_pretrain.ColorJitter(0.4, 0.4),
+            #transforms_pretrain.RandomGaussianBlur(),
+            transforms_pretrain.RandomScaleCrop(settings.IMAGE_SIZE),
+            transforms_pretrain.ToTensor(),
+            transforms_pretrain.Normalize(settings.MEAN, settings.STD),
+        ])
+
+    return trans
 
 def data_loader(args, image_set):
+
+    if args.pretrain:
+
+        dataset = PreTraining(
+                'data/pre_training/',
+                image_set=image_set
+            )
+
+        if image_set == 'train':
+            trans = pretrain_training_transforms()
+        if image_set == 'val':
+            trans = pretrain_test_transforms()
+
+        dataset.transforms = trans
+        data_loader = torch.utils.data.DataLoader(
+                dataset, batch_size=args.b, num_workers=4, shuffle=False, pin_memory=True)
+
+        return data_loader
 
     if args.dataset == 'Camvid':
         dataset = CamVid(
@@ -319,7 +417,12 @@ def data_loader(args, image_set):
             image_set=image_set,
             download=args.download
         )
-
+    elif args.dataset == 'Glas':
+        dataset = Glas(
+            'data',
+            image_set=image_set,
+            download=args.download
+        )
 
     elif args.dataset == 'Voc2012':
         dataset = VOC2012Aug(
@@ -332,8 +435,10 @@ def data_loader(args, image_set):
 
     if image_set == 'train':
         trans = transforms.Compose([
+            transforms.EncodingLable(),
             transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15, fill=dataset.ignore_index),
+            transforms.RandomVerticalFlip(),
+            transforms.RandomRotation(15, fill=0),
             transforms.RandomScaleCrop(settings.IMAGE_SIZE),
             transforms.RandomGaussianBlur(),
             transforms.ColorJitter(0.4, 0.4),
@@ -344,12 +449,13 @@ def data_loader(args, image_set):
     elif image_set == 'val':
         trans = transforms.Compose([
             #transforms.RandomScaleCrop(settings.IMAGE_SIZE),
-            transforms.CenterCrop(settings.IMAGE_SIZE),
+            transforms.EncodingLable(),
+            transforms.CenterCrop(settings.IMAGE_SIZE, fill=dataset.ignore_index),
             transforms.ToTensor(),
             transforms.Normalize(settings.MEAN, settings.STD),
         ])
 
-    elif image_set == 'test':
+    elif image_set in ['test', 'testA', 'testB']:
         trans = transforms.Compose([
             transforms.ToTensor(),
             #transforms.Normalize(settings.MEAN, settings.STD),
@@ -369,7 +475,7 @@ def data_loader(args, image_set):
             dataset, batch_size=args.b, num_workers=4, shuffle=False, pin_memory=True)
     else:
         data_loader = torch.utils.data.DataLoader(
-                dataset, batch_size=args.b, num_workers=4, shuffle=True, pin_memory=True)
+                dataset, batch_size=args.b, num_workers=4, shuffle=False, pin_memory=True)
 
     return data_loader
 
@@ -418,8 +524,10 @@ def scale_process(model, image, classes, crop_h, crop_w, h, w, mean, std=None, s
     stride_w = int(np.ceil(crop_w*stride_rate))
     #print(stride_h, stride_w)
     # how many grids vertically, horizontal
+    print('new_h', new_h, 'crop_h', crop_h)
     grid_h = int(np.ceil(float(new_h-crop_h)/stride_h) + 1)
     grid_w = int(np.ceil(float(new_w-crop_w)/stride_w) + 1)
+    print('new_w', new_w, 'crop_w', crop_w)
     prediction_crop = np.zeros((new_h, new_w, classes), dtype=float)
     count_crop = np.zeros((new_h, new_w), dtype=float)
     for index_h in range(0, grid_h):
@@ -443,14 +551,75 @@ def scale_process(model, image, classes, crop_h, crop_w, h, w, mean, std=None, s
     prediction = cv2.resize(prediction_crop, (w, h), interpolation=cv2.INTER_LINEAR)
     return prediction
 
-def test(net, test_dataloader, crop_size, scales, base_size, classes, mean, std):
+def assign_colors(img, num):
+    colors = [
+        [1, 122, 33],
+  	    (255,255,255),
+ 		(255,0,0),
+ 		(0,255,0),
+ 		(0,0,255),
+ 		(255,255,0),
+ 		(0,255,255),
+        (255,0,255),
+        (192,192,192),
+        (128,128,128),
+        (128,0,0),
+        (128,128,0),
+        (0,128,0),
+        (128,0,128),
+        (0,128,128),
+        (0,0,128),
+        (128,0,0),
+        (255,255,224),
+        (250,250,210),
+        (139,69,19),
+        (160,82,45),
+        (210,105,30),
+        (244,164,96),
+        (176,196,222),
+        (240,255,240),
+        (105,105,105),
+        (46,139,87),
+        (0,0,139),
+        (139,0,139),
+        (238,130,238),
+        (255,250,205),
+        (160,82,45),
+        (245,255,250),
+        (255,228,181),
+        (255,245,238),
+        (119,136,153),
+        (255,105,180),
+    ]
+    gt_colors = cv2.cvtColor(np.zeros(img.shape).astype('uint8'), cv2.COLOR_GRAY2BGR)
+
+    for i in range(num):
+        i += 1
+        #print(img.shape, gt_colors.shape)
+        #print(np.unique(img), i)
+        gt_colors[img == i] = colors[i]
+
+    return gt_colors
+
+def test(net, test_dataloader, crop_size, scales, base_size, classes, mean, std, checkpoint):
     net.eval()
 
 
+    f1 = 0
+    dice = 0
+    hausdorff = 0
+    recall = 0
+    precision = 0
     iou = 0
-    all_acc = 0
-    acc = 0
-    best_iou = 0
+
+    image_set = test_dataloader.dataset.image_set
+    save_path = os.path.join(settings.EVAL_PATH, checkpoint, image_set)
+
+    msges = []
+
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+
     ig_idx = test_dataloader.dataset.ignore_index
     cls_names = test_dataloader.dataset.class_names
     net = net.cuda()
@@ -458,6 +627,7 @@ def test(net, test_dataloader, crop_size, scales, base_size, classes, mean, std)
         assert test_dataloader.batch_size == 1
         img = img.cuda()
         label = label.cuda()
+        label = label.squeeze(dim=0)
         img = np.squeeze(img.cpu().numpy(), axis=0)
         img = np.transpose(img, (1, 2, 0))
         h, w, _ = img.shape
@@ -476,37 +646,98 @@ def test(net, test_dataloader, crop_size, scales, base_size, classes, mean, std)
             crop_h = crop_size
             crop_w = crop_size
             prediction += scale_process(net, img_scale, classes, crop_h, crop_w, h, w, mean, std)
+            print(scale, base_size, new_w, new_h, crop_h, crop_w, h, w)
 
+        import sys
+        sys.exit()
         prediction /= len(scales)
-        prediction = np.argmax(prediction, axis=2)
+        preds = np.argmax(prediction, axis=2)
+        #print('prediction1', prediction.shape)
 
-        preds = np.expand_dims(prediction, axis=0)
-        tmp_all_acc, tmp_acc, tmp_iou = eval_metrics(
+        #preds = np.expand_dims(prediction, axis=0)
+        #tmp_all_acc, tmp_acc, tmp_iou = eval_metrics(
+        #    preds,
+        #    label.detach().cpu().numpy(),
+        #    len(cls_names),
+        #    ignore_index=ig_idx,
+        #    metrics='mIoU',
+        #    nan_to_num=-1
+        #)
+        tmp_recall, tmp_precision, tmp_f1, tmp_dice, tmp_iou, tmp_haus = gland_accuracy_object_level(
             preds,
-            label.detach().cpu().numpy(),
-            len(cls_names),
-            ignore_index=ig_idx,
-            metrics='mIoU',
-            nan_to_num=-1
+            label.detach().cpu().numpy()
         )
+        msg = 'img{}, iou: {:.6f}, f1: {:.6f}, recall: {:.6f}, precision: {:.6f}, dice: {:.6f}, hausdorff: {:.6f}'.format(
+            i,
+            tmp_iou,
+            tmp_f1,
+            tmp_recall,
+            tmp_precision,
+            tmp_dice,
+            tmp_haus
+        )
+        print(msg)
+        msges.append(msg)
 
-        all_acc += tmp_all_acc
-        acc += tmp_acc
+        preds = morph.remove_small_objects(preds == 1, 100)  # remove small object
+        pred_labeled = morph.label(preds, connectivity=2)
+
+        gt_labeled = morph.label(label.detach().cpu().numpy(), connectivity=2)
+        gt_labeled = morph.remove_small_objects(gt_labeled, 3)   # remove 1 or 2 pixel noise in the image
+        gt_labeled = morph.label(gt_labeled, connectivity=2)
+
+        #pred_colors = assign_colors(pred_labeled, np.max(pred_labeled))
+        #gt_colors = assign_colors(gt_labeled, np.max(gt_labeled))
+
+
+        cv2.imwrite(os.path.join(save_path, '{}_pred{}.png').format(image_set, i), pred_labeled)
+        cv2.imwrite(os.path.join(save_path, '{}_gt{}.png').format(image_set, i), gt_labeled)
+        cv2.imwrite(os.path.join(save_path, '{}_img{}.png').format(image_set, i), (img * std + mean) * 255)
+
+
+        #all_acc += tmp_all_acc
+        #acc += tmp_acc
         iou += tmp_iou
+        recall += tmp_recall
+        precision += tmp_precision
+        f1 += tmp_f1
+        dice += tmp_dice
+        hausdorff += tmp_haus
 
-    all_acc /= len(test_dataloader.dataset)
-    acc /= len(test_dataloader.dataset)
     iou /= len(test_dataloader.dataset)
-    print('Iou for each class:')
-    print_eval(cls_names, iou)
-    print('Acc for each class:')
-    print_eval(cls_names, acc)
+    f1 /= len(test_dataloader.dataset)
+    recall /= len(test_dataloader.dataset)
+    precision /= len(test_dataloader.dataset)
+    dice /= len(test_dataloader.dataset)
+    hausdorff /= len(test_dataloader.dataset)
+    msg = 'iou: {:.6f}, f1: {:.6f}, recall: {:.6f}, precision: {:.6f}, dice: {:.6f}, hausdorff: {:.6f}'.format(
+        iou,
+        f1,
+        recall,
+        precision,
+        dice,
+        hausdorff
+    )
+    print(msg)
+    msges.append(msg)
+
+    with open(os.path.join(settings.EVAL_PATH, checkpoint, image_set) + '.txt', 'w') as res_file:
+        for msg in msges:
+            res_file.write(msg + '\n')
+
+    #all_acc /= len(test_dataloader.dataset)
+    #acc /= len(test_dataloader.dataset)
+    #iou /= len(test_dataloader.dataset)
+    #print('Iou for each class:')
+    #print_eval(cls_names, iou)
+    #print('Acc for each class:')
+    #print_eval(cls_names, acc)
     #print('%, '.join([':'.join([str(n), str(round(i, 2))]) for n, i in zip(cls_names, iou)]))
     #iou = iou.tolist()
     #iou = [i for i in iou if iou.index(i) != ig_idx]
-    miou = sum(iou) / len(iou)
-    macc = sum(acc) / len(acc)
-    print('Mean acc {:.4f} Mean iou {:.4f}  All Pixel Acc {:.4f}'.format(macc, miou, all_acc))
+    #miou = sum(iou) / len(iou)
+    #macc = sum(acc) / len(acc)
+    #print('Mean acc {:.4f} Mean iou {:.4f}  All Pixel Acc {:.4f}'.format(macc, miou, all_acc))
     #print('%, '.join([':'.join([str(n), str(round(a, 2))]) for n, a in zip(cls_names, acc)]))
     #print('All acc {:.2f}%'.format(all_acc))
 

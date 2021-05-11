@@ -10,7 +10,7 @@ import numpy as np
 from conf import settings
 
 class CamVid(Dataset):
-    def __init__(self, root, download=False, image_set='train', transforms=None):
+    def __init__(self, root, download=False, image_set='train', transforms=None, segment=True):
         """
         Camvid dataset:https://course.fast.ai/datasets
         or simply wget https://s3.amazonaws.com/fast-ai-imagelocal/camvid.tgz
@@ -174,5 +174,6 @@ class CamVid(Dataset):
 
         if self.transforms:
                 image, label = self.transforms(image, label)
+        trans = self.transforms[:-2]
 
         return image, label

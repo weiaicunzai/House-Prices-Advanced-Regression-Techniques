@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 from torchvision.datasets.utils import download_url
 import numpy as np
 
-class Glas(nn.Module):
+class Glas(Dataset):
     def __init__(self, path, image_set, transforms=None, download=False):
         url = 'https://warwick.ac.uk/fac/sci/dcs/research/tia/glascontest/download/warwick_qu_dataset_released_2016_07_08.zip'
         file_name = 'warwick_qu_dataset_released_2016_07_08.zip'
@@ -38,10 +38,12 @@ class Glas(nn.Module):
         #image_re = re.escape(image_set + '_[0-9]+\.bmp')
         #image_re = image_set + '_[0-9]+\.bmp'
         #label_re = re.escape(image_set + '_[0-9]+_anno\.bmp')
-        if image_set not in ['train', 'testA', 'testB']:
+        if image_set not in ['train', 'testA', 'testB', 'val']:
             raise ValueError('wrong image_set argument')
         label_re = image_set + '_[0-9]+_' + 'anno' + '\.bmp'
-        self.names = []
+        if image_set == 'val':
+            label_re = 'test[A|B]' +  '_[0-9]+_' + 'anno' + '\.bmp'
+
         for bmp in glob.iglob(search_path, recursive=True):
             if re.search(label_re, bmp):
                 self.labels.append(cv2.imread(bmp, -1))
@@ -49,23 +51,23 @@ class Glas(nn.Module):
             #elif re.search(image_re, bmp):
                 self.images.append(cv2.imread(bmp, -1))
 
-                self.names.append(bmp)
         assert len(self.images) == len(self.labels)
         self.transforms = transforms
-
+        self.mean = (0.7851387990848604, 0.5111793462233759, 0.787433705481764)
+        self.std = (0.13057256006459803, 0.24522816688399154, 0.16553457394913107)
+        self.image_set = image_set
 
     def __len__(self):
         return len(self.images)
 
     def __getitem__(self, index):
-        print(self.names[index])
 
         image = self.images[index]
         label = self.labels[index]
         if self.transforms is not None:
             image, label = self.transforms(image, label)
 
-        return image, label, self.names[index]
+        return image, label
 
 
 

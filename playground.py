@@ -21,6 +21,7 @@ from lr_scheduler import PolyLR
 from metric import eval_metrics
 from loss import SegmentLevelLoss
 
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -40,9 +41,6 @@ if __name__ == '__main__':
         help='whether to download camvid dataset')
     parser.add_argument('-gpu', action='store_true', default=False, help='whether to use gpu')
     parser.add_argument('-baseline', action='store_true', default=False, help='base line')
-    parser.add_argument('-pretrain', action='store_true', default=False, help='pretrain data')
-    parser.add_argument('-poly', action='store_true', default=False, help='poly decay')
-    parser.add_argument('-branch', type=str, default='hybird', help='dataset name')
     args = parser.parse_args()
 
     root_path = os.path.dirname(os.path.abspath(__file__))
@@ -110,7 +108,10 @@ if __name__ == '__main__':
     validation_loader = utils.data_loader(args, 'val')
     valid_dataset = validation_loader.dataset
 
-    net = utils.get_model(args.net, 3, train_dataset.class_num, args=args)
+    net = utils.get_model(args.net, 3, train_dataset.class_num)
+    #net = nn.Parameter(torch.zeros((3, 4, 5)))
+    #net = nn.Conv2d(3, 4, 3)
+    print('fjlfkjflkjfk')
 
     if args.resume:
         weight_path = utils.get_weight_path(
@@ -123,7 +124,7 @@ if __name__ == '__main__':
         net = net.cuda()
 
     tensor = torch.Tensor(1, 3, settings.IMAGE_SIZE, settings.IMAGE_SIZE)
-    utils.visualize_network(writer, net, tensor)
+    #utils.visualize_network(writer, net, tensor)
 
     #optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.wd)
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
@@ -132,28 +133,18 @@ if __name__ == '__main__':
     max_iter = args.e * len(train_loader)
     train_scheduler = PolyLR(optimizer, max_iter=max_iter, power=0.9)
     loss_fn = nn.CrossEntropyLoss(ignore_index=train_dataset.ignore_index, reduction='none')
-    loss_l2 = nn.MSELoss()
     loss_seg = SegmentLevelLoss(op=args.op)
 
     best_iou = 0
     trained_epochs = 0
-    prev_best = ''
 
     if args.resume:
         trained_epochs = int(
             re.search('([0-9]+)-(best|regular).pth', weight_path).group(1))
         #train_scheduler.step(trained_epochs * len(train_loader))
 
-    # need to be deleted
-    #net.load_state_dict(torch.load('/data/by/House-Prices-Advanced-Regression-Techniques/checkpoints/transseg_SGD_473_poly_pretrain_backbone_resnet50_Saturday_10_April_2021_20h_31m_02s/1477-best.pth'))
-    #net.set_cls_pred()
-    net.cuda()
-    #torch.save(net.state_dict(), 'test.pth')
-    #print('saved')
-
-
-
     for epoch in range(trained_epochs + 1, args.e + 1):
+        print('.............................................................')
         start = time.time()
 
         net.train()
@@ -161,8 +152,10 @@ if __name__ == '__main__':
         ious = 0
         batch_start = time.time()
         total_load_time = 0
+        print('.............................................................')
         for batch_idx, (images, masks) in enumerate(train_loader):
-        #for batch_idx, images in enumerate(train_loader):
+            print('mmmmmmmmmmmmmmmmmmmm')
+            print(batch_idx)
 
             batch_finish = time.time()
 
@@ -171,19 +164,14 @@ if __name__ == '__main__':
             if args.gpu:
                 images = images.cuda()
                 masks = masks.cuda()
-                #if masks is not None:
-                #else:
-                #    print(1111)
-                #masks = images
 
             preds = net(images)
 
             loss = loss_fn(preds, masks)
-            #loss =  loss_l2(preds, masks)
 
-            #if not args.baseline:
-            #    seg_loss = loss_seg(preds, masks)
-            #    loss[seg_loss == 1] *= args.alpha
+            if not args.baseline:
+                seg_loss = loss_seg(preds, masks)
+                loss[seg_loss == 1] *= args.alpha
 
             loss = loss.mean()
             loss.backward()
@@ -201,149 +189,141 @@ if __name__ == '__main__':
                 #beta=optimizer.param_groups[0]['betas'][0],
                 time=batch_finish - batch_start
             ))
-            if args.poly:
-                train_scheduler.step()
-
-            total_load_time += batch_finish - batch_start
-
-            n_iter = (epoch - 1) * iter_per_epoch + batch_idx + 1
-            utils.visulaize_lastlayer(
-                writer,
-                net,
-                n_iter,
-            )
-
-            batch_start = time.time()
-
-        utils.visualize_scalar(
-            writer,
-            'Train/LearningRate',
-            optimizer.param_groups[0]['lr'],
-            #optimizer.param_groups[0]['betas'][0],
-            epoch,
-        )
-
-        #utils.visualize_scalar(
-        #    writer,
-        #    'Train/Beta1',
-        #    optimizer.param_groups[0]['betas'][0],
-        #    epoch,
-        #)
-        #print(total_load_time, total_training)
-
-        utils.visualize_param_hist(writer, net, epoch)
-
-        if args.gpu:
-            print('GPU INFO.....')
-            print(torch.cuda.memory_summary(), end='')
-
-        finish = time.time()
-        total_training = finish - start
-        print(('Total time for training epoch {} : {:.2f}s, '
-               'total time for loading data: {:.2f}s, '
-               '{:.2f}% time used for loading data').format(
-            epoch,
-            total_training,
-            total_load_time,
-            total_load_time / total_training * 100
-        ))
-
-        net.eval()
-        test_loss = 0.0
-
-        test_start = time.time()
-        iou = 0
-        all_acc = 0
-        acc = 0
-
-        cls_names = valid_dataset.class_names
-        ig_idx = valid_dataset.ignore_index
-        with torch.no_grad():
-            for images, masks in validation_loader:
-            #for images in validation_loader:
-
-                if args.gpu:
-                    images = images.cuda()
-                    masks = masks.cuda()
-                    #masks = images
-
-                preds = net(images)
-
-                loss = loss_fn(preds, masks)
-
-                #if not args.baseline:
-                #    seg_loss = loss_seg(preds, masks)
-                #    loss[seg_loss == 1] *= args.alpha
-
-                loss = loss.mean()
-                test_loss += loss.item()
-
-                preds = preds.argmax(dim=1)
-                #tmp_all_acc, tmp_acc, tmp_mean_iou = eval_metrics(
-                #    , masks.detach().cpu().numpy(), len(cls_names), ig_idx
-                #)
-                tmp_all_acc, tmp_acc, tmp_iou = eval_metrics(
-                    preds.detach().cpu().numpy(),
-                    masks.detach().cpu().numpy(),
-                    len(cls_names),
-                    ignore_index=ig_idx,
-                    metrics='mIoU',
-                    nan_to_num=-1
-                )
-
-                all_acc += tmp_all_acc * len(images)
-                acc += tmp_acc * len(images)
-                iou += tmp_iou * len(images)
-
-        all_acc /= len(validation_loader.dataset)
-        acc /= len(validation_loader.dataset)
-        iou /= len(validation_loader.dataset)
-        test_finish = time.time()
-        print('Evaluation time comsumed:{:.2f}s'.format(test_finish - test_start))
-        print('Iou for each class:')
-        utils.print_eval(cls_names, iou)
-        print('Acc for each class:')
-        utils.print_eval(cls_names, acc)
-        #print('%, '.join([':'.join([str(n), str(round(i, 2))]) for n, i in zip(cls_names, iou)]))
-        #iou = iou.tolist()
-        #iou = [i for i in iou if iou.index(i) != ig_idx]
-        miou = sum(iou) / len(iou)
-        print('Epoch {}  Mean iou {:.4f}  All Pixel Acc {:.4f}'.format(epoch, miou, all_acc))
-        #print('%, '.join([':'.join([str(n), str(round(a, 2))]) for n, a in zip(cls_names, acc)]))
-        #print('All acc {:.2f}%'.format(all_acc))
-
-        utils.visualize_scalar(
-            writer,
-            'Test/mIOU',
-            miou,
-            epoch,
-        )
-
-        utils.visualize_scalar(
-            writer,
-            'Test/Acc',
-            all_acc,
-            epoch,
-        )
-
-        utils.visualize_scalar(
-            writer,
-            'Test/Loss',
-            test_loss / len(valid_dataset),
-            epoch,
-        )
-
-        if best_iou < miou and epoch > args.e // 4:
-        #if best_iou < miou:
-            best_iou = miou
-            if prev_best:
-                os.remove(prev_best)
-
-            torch.save(net.state_dict(),
-                            checkpoint_path.format(epoch=epoch, type='best'))
-            prev_best = checkpoint_path.format(epoch=epoch, type='best')
-            continue
-
-        if not epoch % settings.SAVE_EPOCH:
-            torch.save(net.state_dict(),
-                            checkpoint_path.format(epoch=epoch, type='regular'))
+#            train_scheduler.step()
+#
+#            total_load_time += batch_finish - batch_start
+#
+#            n_iter = (epoch - 1) * iter_per_epoch + batch_idx + 1
+#            utils.visulaize_lastlayer(
+#                writer,
+#                net,
+#                n_iter,
+#            )
+#
+#            batch_start = time.time()
+#
+#        utils.visualize_scalar(
+#            writer,
+#            'Train/LearningRate',
+#            optimizer.param_groups[0]['lr'],
+#            epoch,
+#        )
+#
+#        #utils.visualize_scalar(
+#        #    writer,
+#        #    'Train/Beta1',
+#        #    optimizer.param_groups[0]['betas'][0],
+#        #    epoch,
+#        #)
+#        #print(total_load_time, total_training)
+#
+#        utils.visualize_param_hist(writer, net, epoch)
+#
+#        if args.gpu:
+#            print('GPU INFO.....')
+#            print(torch.cuda.memory_summary(), end='')
+#
+#        finish = time.time()
+#        total_training = finish - start
+#        print(('Total time for training epoch {} : {:.2f}s, '
+#               'total time for loading data: {:.2f}s, '
+#               '{:.2f}% time used for loading data').format(
+#            epoch,
+#            total_training,
+#            total_load_time,
+#            total_load_time / total_training * 100
+#        ))
+#
+#        net.eval()
+#        test_loss = 0.0
+#
+#        test_start = time.time()
+#        iou = 0
+#        all_acc = 0
+#        acc = 0
+#
+#        cls_names = valid_dataset.class_names
+#        ig_idx = valid_dataset.ignore_index
+#        with torch.no_grad():
+#            for images, masks in validation_loader:
+#
+#                if args.gpu:
+#                    images = images.cuda()
+#                    masks = masks.cuda()
+#
+#                preds = net(images)
+#
+#                loss = loss_fn(preds, masks)
+#
+#                if not args.baseline:
+#                    seg_loss = loss_seg(preds, masks)
+#                    loss[seg_loss == 1] *= args.alpha
+#
+#                loss = loss.mean()
+#                test_loss += loss.item()
+#
+#                preds = preds.argmax(dim=1)
+#                #tmp_all_acc, tmp_acc, tmp_mean_iou = eval_metrics(
+#                #    , masks.detach().cpu().numpy(), len(cls_names), ig_idx
+#                #)
+#                tmp_all_acc, tmp_acc, tmp_iou = eval_metrics(
+#                    preds.detach().cpu().numpy(),
+#                    masks.detach().cpu().numpy(),
+#                    len(cls_names),
+#                    ignore_index=ig_idx,
+#                    metrics='mIoU',
+#                    nan_to_num=-1
+#                )
+#
+#                all_acc += tmp_all_acc * len(images)
+#                acc += tmp_acc * len(images)
+#                iou += tmp_iou * len(images)
+#
+#        all_acc /= len(validation_loader.dataset)
+#        acc /= len(validation_loader.dataset)
+#        iou /= len(validation_loader.dataset)
+#        test_finish = time.time()
+#        print('Evaluation time comsumed:{:.2f}s'.format(test_finish - test_start))
+#        print('Iou for each class:')
+#        utils.print_eval(cls_names, iou)
+#        print('Acc for each class:')
+#        utils.print_eval(cls_names, acc)
+#        #print('%, '.join([':'.join([str(n), str(round(i, 2))]) for n, i in zip(cls_names, iou)]))
+#        #iou = iou.tolist()
+#        #iou = [i for i in iou if iou.index(i) != ig_idx]
+#        miou = sum(iou) / len(iou)
+#        print('Epoch {}  Mean iou {:.4f}  All Pixel Acc {:.4f}'.format(epoch, miou, all_acc))
+#        #print('%, '.join([':'.join([str(n), str(round(a, 2))]) for n, a in zip(cls_names, acc)]))
+#        #print('All acc {:.2f}%'.format(all_acc))
+#
+#        utils.visualize_scalar(
+#            writer,
+#            'Test/mIOU',
+#            miou,
+#            epoch,
+#        )
+#
+#        utils.visualize_scalar(
+#            writer,
+#            'Test/Acc',
+#            all_acc,
+#            epoch,
+#        )
+#
+#        utils.visualize_scalar(
+#            writer,
+#            'Test/Loss',
+#            test_loss / len(valid_dataset),
+#            epoch,
+#        )
+#
+#        if best_iou < miou and epoch > args.e // 2:
+#            best_iou = miou
+#            torch.save(net.state_dict(),
+#                            checkpoint_path.format(epoch=epoch, type='best'))
+#            continue
+#
+#        if not epoch % settings.SAVE_EPOCH:
+#            torch.save(net.state_dict(),
+#                            checkpoint_path.format(epoch=epoch, type='regular'))
+#

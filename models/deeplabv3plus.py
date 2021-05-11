@@ -214,3 +214,9 @@ class ASPP(nn.Module):
 
 def deeplabv3plus(class_num):
     return DeepLabv3Puls(class_num)
+
+
+
+net = deeplabv3plus(32)
+img = torch.randn(2, 3, 512, 512)
+print(net(img).shape)
