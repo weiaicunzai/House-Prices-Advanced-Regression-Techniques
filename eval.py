@@ -41,7 +41,6 @@ if __name__ == '__main__':
     if args.dataset == 'Glas':
         test_dataloader = utils.data_loader(args, 'testA')
         test_dataset = test_dataloader.dataset
-        print(test_dataset, test_dataset.class_num, test_dataset.transforms)
         net = utils.get_model(args.net, 3, test_dataset.class_num, args=args)
         net.load_state_dict(torch.load(args.weight))
         net = net.cuda()

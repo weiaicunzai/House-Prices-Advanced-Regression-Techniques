@@ -19,6 +19,7 @@ nohup.out
 *.png
 *.jpg
 res_mask
+res
 res2
 res3
 res3.txt
@@ -32,3 +33,5 @@ unet_res
 test.pth
 result
 data
+models/vit.py
+models/swin_test.py

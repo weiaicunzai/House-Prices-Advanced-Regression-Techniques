@@ -39,7 +39,7 @@ from skimage import measure
 def assign_colors(img, num):
     colors = [
         [1, 122, 33],
-  	    (255,255,255),
+  	    (255, 33,255),
  		(255,0,0),
  		(0,255,0),
  		(0,0,255),

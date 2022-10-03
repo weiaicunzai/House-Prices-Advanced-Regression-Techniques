@@ -524,10 +524,10 @@ def scale_process(model, image, classes, crop_h, crop_w, h, w, mean, std=None, s
     stride_w = int(np.ceil(crop_w*stride_rate))
     #print(stride_h, stride_w)
     # how many grids vertically, horizontal
-    print('new_h', new_h, 'crop_h', crop_h)
+    #print('new_h', new_h, 'crop_h', crop_h)
     grid_h = int(np.ceil(float(new_h-crop_h)/stride_h) + 1)
     grid_w = int(np.ceil(float(new_w-crop_w)/stride_w) + 1)
-    print('new_w', new_w, 'crop_w', crop_w)
+    #print('new_w', new_w, 'crop_w', crop_w)
     prediction_crop = np.zeros((new_h, new_w, classes), dtype=float)
     count_crop = np.zeros((new_h, new_w), dtype=float)
     for index_h in range(0, grid_h):
@@ -554,7 +554,7 @@ def scale_process(model, image, classes, crop_h, crop_w, h, w, mean, std=None, s
 def assign_colors(img, num):
     colors = [
         [1, 122, 33],
-  	    (255,255,255),
+  	    # (255,25,255),
  		(255,0,0),
  		(0,255,0),
  		(0,0,255),
@@ -646,10 +646,8 @@ def test(net, test_dataloader, crop_size, scales, base_size, classes, mean, std,
             crop_h = crop_size
             crop_w = crop_size
             prediction += scale_process(net, img_scale, classes, crop_h, crop_w, h, w, mean, std)
-            print(scale, base_size, new_w, new_h, crop_h, crop_w, h, w)
+            #print(scale, base_size, new_w, new_h, crop_h, crop_w, h, w)
 
-        import sys
-        sys.exit()
         prediction /= len(scales)
         preds = np.argmax(prediction, axis=2)
         #print('prediction1', prediction.shape)

@@ -2,6 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import torch
+from torch import nn, einsum
+import torch.nn.functional as F
+
+
 class BasicConv2d(nn.Module):
 
     def __init__(self, in_channels, out_channels):
@@ -63,6 +68,7 @@ class UNet(nn.Module):
             BasicConv2d(512, 1024),
             BasicConv2d(1024, 1024)
         )
+        self.down5_trans = Transformer(1024, 1, 8, 126, 1024 * 4, dropout=0.1)
 
         self.upsample1 = UpSample2d(1024, 512)
         self.up1 = nn.Sequential(
@@ -83,6 +89,7 @@ class UNet(nn.Module):
         )
 
         self.upsample4 = UpSample2d(128, 64)
+    #def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout = 0.):
         self.up4 = nn.Sequential(
             BasicConv2d(128, 64),
             BasicConv2d(64, 64)
@@ -109,6 +116,10 @@ class UNet(nn.Module):
         x = self.maxpool(xd4)
 
         x = self.down5(x)
+        h = x.shape[-2]
+        x = rearrange(x, 'b c h w -> b (h w) c')
+        x = self.down5_trans(x)
+        x = rearrange(x, 'b (h w) c -> b c h w', h=h)
 
         """Every step in the expansive path consists of an upsampling of the
         feature map followed by a 2x2 convolution (“up-convolution”) that
@@ -154,3 +165,10 @@ class UNet(nn.Module):
         x = self.output(x)
 
         return x
+
+
+#net = UNet(3, 3)
+#
+#img = torch.randn(3, 3, 512, 512)
+#
+#a = net(img)

@@ -172,6 +172,8 @@ def eval_metrics(results,
     return ret_metrics
 
 
+import skimage.morphology as morph
+
 #def assign_colors(img, num):
 #    colors = [
 #        [1, 122, 33],
