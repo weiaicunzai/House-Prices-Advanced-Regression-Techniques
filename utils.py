@@ -215,8 +215,11 @@ def get_model(model_name, input_channels, class_num, args=None):
 
     elif model_name == 'transseg':
         from models.one.transformer import transseg
-        #print(class_num)
         net = transseg(class_num, segment=not args.pretrain)
+
+    elif model_name == 'fullnet':
+        from models.fullnet import fullnet
+        net = fullnet(class_num)
     else:
         raise ValueError('network type does not supported')
 
