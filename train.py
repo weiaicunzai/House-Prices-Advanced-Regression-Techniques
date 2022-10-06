@@ -10,6 +10,9 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 import numpy as np
+from torch.cuda.amp import GradScaler
+from torch.cuda.amp import autocast
+print(torch.cuda.amp.__file__)
 
 import transforms
 import utils
@@ -43,6 +46,7 @@ if __name__ == '__main__':
     parser.add_argument('-pretrain', action='store_true', default=False, help='pretrain data')
     parser.add_argument('-poly', action='store_true', default=False, help='poly decay')
     parser.add_argument('-branch', type=str, default='hybird', help='dataset name')
+    parser.add_argument('-fp16', action='store_true', default=False, help='whether to use mixed precision training')
     args = parser.parse_args()
 
     root_path = os.path.dirname(os.path.abspath(__file__))
@@ -153,6 +157,7 @@ if __name__ == '__main__':
 
 
 
+    scaler = GradScaler()
     for epoch in range(trained_epochs + 1, args.e + 1):
         start = time.time()
 
@@ -166,7 +171,6 @@ if __name__ == '__main__':
 
             batch_finish = time.time()
 
-            optimizer.zero_grad()
 
             if args.gpu:
                 images = images.cuda()
@@ -176,19 +180,33 @@ if __name__ == '__main__':
                 #    print(1111)
                 #masks = images
 
-            preds = net(images)
+            if args.fp16:
+                with autocast():
+                    preds = net(images)
+                    # print(preds.dtype)
+                    loss = loss_fn(preds, masks)
+                    loss = loss.mean()
+                    # print(loss.dtype)
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad()
 
-            loss = loss_fn(preds, masks)
+            else:
+                preds = net(images)
+                loss = loss_fn(preds, masks)
+                loss = loss.mean()
+                loss.backward()
+                optimizer.step()
+                optimizer.zero_grad()
+
             #loss =  loss_l2(preds, masks)
 
             #if not args.baseline:
             #    seg_loss = loss_seg(preds, masks)
             #    loss[seg_loss == 1] *= args.alpha
 
-            loss = loss.mean()
-            loss.backward()
 
-            optimizer.step()
 
             print(('Training Epoch:{epoch} [{trained_samples}/{total_samples}] '
                     #'Lr:{lr:0.6f} Loss:{loss:0.4f} Beta1:{beta:0.4f} Time:{time:0.2f}s').format(
@@ -258,8 +276,7 @@ if __name__ == '__main__':
 
         cls_names = valid_dataset.class_names
         ig_idx = valid_dataset.ignore_index
-        with torch.no_grad():
-            for images, masks in validation_loader:
+        for images, masks in validation_loader:
             #for images in validation_loader:
 
                 if args.gpu:
@@ -267,15 +284,17 @@ if __name__ == '__main__':
                     masks = masks.cuda()
                     #masks = images
 
-                preds = net(images)
+                with torch.no_grad():
+                    preds = net(images)
+                    loss = loss_fn(preds, masks)
+                    loss = loss.mean()
+                # continue
 
-                loss = loss_fn(preds, masks)
 
                 #if not args.baseline:
                 #    seg_loss = loss_seg(preds, masks)
                 #    loss[seg_loss == 1] *= args.alpha
 
-                loss = loss.mean()
                 test_loss += loss.item()
 
                 preds = preds.argmax(dim=1)
@@ -295,6 +314,7 @@ if __name__ == '__main__':
                 acc += tmp_acc * len(images)
                 iou += tmp_iou * len(images)
 
+        # continue
         all_acc /= len(validation_loader.dataset)
         acc /= len(validation_loader.dataset)
         iou /= len(validation_loader.dataset)
