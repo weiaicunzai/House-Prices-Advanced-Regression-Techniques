@@ -35,3 +35,4 @@ result
 data
 models/vit.py
 models/swin_test.py
+run1.sh
