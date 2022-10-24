@@ -65,8 +65,8 @@ mmsegmentation/requirements
 save
 work_dirs_tmp
 nohup.out*
-mmsegmentation
-
+mmsegmentation/tests
+work_dirs
 
 
 
