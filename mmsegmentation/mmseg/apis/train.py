@@ -176,7 +176,6 @@ def train_segmentor(model,
     if validate:
         print(cfg.data.val)
         val_dataset = build_dataset(cfg.data.val, dict(test_mode=True))
-        print(val_dataset.pipeline, val_dataset)
         # The specific dataloader settings
         val_loader_cfg = {
             **loader_cfg,

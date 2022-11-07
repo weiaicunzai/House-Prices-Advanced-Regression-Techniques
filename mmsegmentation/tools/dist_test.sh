@@ -26,6 +26,9 @@
 
 export CUDA_VISIBLE_DEVICES=1
 CONFIG_FILE='/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/mmsegmentation/configs/unet/fcn_unet_s5-d16_ce-1.0-dice-3.0_64x64_40k_glas.py'
-CHECKPOINT_FILE='/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/mmsegmentation/work_dirs/fcn_unet_s5-d16_ce-1.0-dice-3.0_64x64_40k_glas/iter_40000.pth'
+#CHECKPOINT_FILE='/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/mmsegmentation/work_dirs/fcn_unet_s5-d16_ce-1.0-dice-3.0_64x64_40k_glas/iter_40000.pth'
+#CHECKPOINT_FILE='/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/mmsegmentation/work_dirs/fcn_unet_s5-d16_ce-1.0-dice-3.0_64x64_40k_glas/iter_40000.pth'
+#CHECKPOINT_FILE='/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/mmsegmentation/work_dirs/fcn_unet_s5-d16_ce-1.0-dice-3.0_64x64_40k_glas/Monday_24_October_2022_20h_04m_50s/iter_40000.pth'
+CHECKPOINT_FILE='/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/mmsegmentation/work_dirs/fcn_unet_s5-d16_ce-1.0-dice-3.0_64x64_40k_glas/Monday_24_October_2022_20h_04m_50s/best_testB_objF1_iter_14800.pth'
 # python tools/test.py ${CONFIG_FILE} ${CHECKPOINT_FILE} [--out ${RESULT_FILE}] [--eval ${EVAL_METRICS}] [--show]
 python tools/test.py ${CONFIG_FILE} ${CHECKPOINT_FILE}  --eval 'glas' --show-dir 'work_dirs/show_dir'
