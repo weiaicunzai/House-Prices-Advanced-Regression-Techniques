@@ -90,10 +90,13 @@ class EncoderDecoder(BaseSegmentor):
             align_corners=self.align_corners)
         return out
 
-    def _decode_head_forward_train(self, x, img_metas, gt_semantic_seg):
+    def _decode_head_forward_train(self, x, img_metas, gt_semantic_seg):    # first method to call
         """Run forward function and calculate loss for decode head in
         training."""
         losses = dict()
+
+        # self.decode_head: class FCNHead
+        # compute two losses: ce_loss + dice loss
         loss_decode = self.decode_head.forward_train(x, img_metas,
                                                      gt_semantic_seg,
                                                      self.train_cfg)
@@ -148,15 +151,20 @@ class EncoderDecoder(BaseSegmentor):
         """
 
 
+        # UNet.forward
+        # backbone extract features
+        # feature map with each level
         x = self.extract_feat(img)
 
         losses = dict()
 
+        # 
         loss_decode = self._decode_head_forward_train(x, img_metas,
                                                       gt_semantic_seg)
         losses.update(loss_decode)
 
         if self.with_auxiliary_head:
+            # 
             loss_aux = self._auxiliary_head_forward_train(
                 x, img_metas, gt_semantic_seg)
             losses.update(loss_aux)
@@ -188,7 +196,43 @@ class EncoderDecoder(BaseSegmentor):
                 y1 = max(y2 - h_crop, 0)
                 x1 = max(x2 - w_crop, 0)
                 crop_img = img[:, :, y1:y2, x1:x2]
+
+                #if crop_img.shape[2] < h_crop or crop_img.shape[3] < w_crop:
+
+                #    # if h_crop < crop_img
+                #    # start_y = max((h_crop - crop_img.shape[2]) // 2, 0)
+                #    start_y = (h_crop - crop_img.shape[2]) // 2
+
+                #    # if w_crop < crop_img
+                #    # start_x = max((w_crop - crop_img.shape[1]) // 2, 0)
+                #    start_x = (w_crop - crop_img.shape[3]) // 2
+
+                #    end_y = start_y + crop_img.shape[2]
+                #    end_x = start_x + crop_img.shape[3]
+
+                #    # crop_img is definitely smaller than h_crop and w_crop
+                #    # on both sides (w, h)
+                #    template = img.new_zeros(batch_size, 
+                #        #out_channels, 
+                #        crop_img.shape[1],
+                #        # max(h_crop, crop_img.shape[2]), 
+                #        h_crop,
+                #        # max(w_crop, crop_img.shape[1]),
+                #        w_crop
+                #    )
+
+                #    template[:, :, start_y:end_y, start_x:end_x] = crop_img
+                #    crop_seg_logit = self.encode_decode(template, img_meta)
+                #    # print(crop_seg_logit.shape, template.shape)
+                #    #assert crop_seg_logit.shape == template.shape
+                #    # assert crop_seg_logit.shape[0] == template.shape[0]
+                #    assert crop_seg_logit.shape[2:] == template.shape[2:]
+                #    crop_seg_logit = crop_seg_logit[:, :, start_y:end_y, start_x:end_x]
+                #    assert crop_seg_logit.shape[2:] == crop_img.shape[2:]
+
+                # else:
                 crop_seg_logit = self.encode_decode(crop_img, img_meta)
+
                 preds += F.pad(crop_seg_logit,
                                (int(x1), int(preds.shape[3] - x2), int(y1),
                                 int(preds.shape[2] - y2)))

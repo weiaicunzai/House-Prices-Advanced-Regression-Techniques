@@ -202,7 +202,7 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
             inputs = torch.cat(upsampled_inputs, dim=1)
         elif self.input_transform == 'multiple_select':
             inputs = [inputs[i] for i in self.in_index]
-        else:
+        else: # here
             inputs = inputs[self.in_index]
 
         return inputs
@@ -229,8 +229,8 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
-        seg_logits = self(inputs)
-        losses = self.losses(seg_logits, gt_semantic_seg)
+        seg_logits = self(inputs) # seg_logits(tensor):shape  (16, 2, h, w)
+        losses = self.losses(seg_logits, gt_semantic_seg)  
         return losses
 
     def forward_test(self, inputs, img_metas, test_cfg):
@@ -266,7 +266,7 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
             size=seg_label.shape[2:],
             mode='bilinear',
             align_corners=self.align_corners)
-        if self.sampler is not None:
+        if self.sampler is not None:  # HEOM
             seg_weight = self.sampler.sample(seg_logit, seg_label)
         else:
             seg_weight = None
@@ -276,6 +276,8 @@ class BaseDecodeHead(BaseModule, metaclass=ABCMeta):
             losses_decode = [self.loss_decode]
         else:
             losses_decode = self.loss_decode
+
+        # ce_loss + dice_loss
         for loss_decode in losses_decode:
             if loss_decode.loss_name not in loss:
                 loss[loss_decode.loss_name] = loss_decode(

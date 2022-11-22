@@ -54,6 +54,7 @@ custom_hooks = [
 
 
 work_dir = './work_dirs/fcn_unet_s5-d16_ce-1.0-dice-3.0_64x64_40k_glas'
+# work_dir = './tmp_del/fcn_unet_s5-d16_ce-1.0-dice-3.0_64x64_40k_glas'
 
 checkpoint_config = dict(
     # by_epoch=False, interval=4000
@@ -89,16 +90,26 @@ data = dict(samples_per_gpu=4 * bs_scale)
 model = dict(
 
     decode_head=dict(
+        # in_channels=()
+        in_index=(0, 1, 2, 3, 4),
         ignore_index=255,
+        in_channels=(64, 128, 256, 512, 1024),
+        # input_transforms=''
+        input_transform='resize_concat',
         sampler=dict(type='OHEMPixelSampler', thresh=0.7, min_kept=100000),
         loss_decode=[
             dict(type='CrossEntropyLoss', loss_name='loss_ce', loss_weight=1.0),
             dict(type='DiceLoss', loss_name='loss_dice', loss_weight=3.0),
-        ]
+        ],
+        # input_transform='resize_concat',
     ),
 
     # test_cfg=
-    test_cfg=dict(crop_size=(480, 480), stride=(320, 320))
+    # test_cfg=dict(crop_size=(480, 480), stride=(320, 320))
+    #test_cfg=dict(crop_size=(480, 480), stride=(128, 128))
+    test_cfg=dict(crop_size=(480, 480), stride=(256, 256))
+    #test_cfg=dict(crop_size=(256, 256), stride=(128, 128))
+
 )
 
 # model=dict(
