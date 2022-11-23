@@ -1,8 +1,8 @@
 # _base_ = './fcn_unet_s5-d16_64x64_40k_glas.py'
 _base_ = [
-    '../_base_/models/fcn_unet_s5-d16.py', 
+    '../_base_/models/fcn_unet_s5-d16.py',
     '../_base_/datasets/glas.py',
-    '../_base_/default_runtime.py', 
+    '../_base_/default_runtime.py',
     # '../_base_/schedules/schedule_20k.py'
     '../_base_/schedules/schedule_40k.py'
 ]

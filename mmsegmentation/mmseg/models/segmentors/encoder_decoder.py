@@ -158,13 +158,12 @@ class EncoderDecoder(BaseSegmentor):
 
         losses = dict()
 
-        # 
         loss_decode = self._decode_head_forward_train(x, img_metas,
                                                       gt_semantic_seg)
         losses.update(loss_decode)
 
         if self.with_auxiliary_head:
-            # 
+            #
             loss_aux = self._auxiliary_head_forward_train(
                 x, img_metas, gt_semantic_seg)
             losses.update(loss_aux)
@@ -212,10 +211,10 @@ class EncoderDecoder(BaseSegmentor):
 
                 #    # crop_img is definitely smaller than h_crop and w_crop
                 #    # on both sides (w, h)
-                #    template = img.new_zeros(batch_size, 
-                #        #out_channels, 
+                #    template = img.new_zeros(batch_size,
+                #        #out_channels,
                 #        crop_img.shape[1],
-                #        # max(h_crop, crop_img.shape[2]), 
+                #        # max(h_crop, crop_img.shape[2]),
                 #        h_crop,
                 #        # max(w_crop, crop_img.shape[1]),
                 #        w_crop
@@ -248,6 +247,7 @@ class EncoderDecoder(BaseSegmentor):
             # remove padding area
             resize_shape = img_meta[0]['img_shape'][:2]
             preds = preds[:, :, :resize_shape[0], :resize_shape[1]]
+            # print(resize_shape,  preds.shape[2:])
             preds = resize(
                 preds,
                 size=img_meta[0]['ori_shape'][:2],
