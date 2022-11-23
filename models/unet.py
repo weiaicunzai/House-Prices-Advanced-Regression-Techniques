@@ -68,7 +68,7 @@ class UNet(nn.Module):
             BasicConv2d(512, 1024),
             BasicConv2d(1024, 1024)
         )
-        self.down5_trans = Transformer(1024, 1, 8, 126, 1024 * 4, dropout=0.1)
+        # self.down5_trans = Transformer(1024, 1, 8, 126, 1024 * 4, dropout=0.1)
 
         self.upsample1 = UpSample2d(1024, 512)
         self.up1 = nn.Sequential(
@@ -116,10 +116,10 @@ class UNet(nn.Module):
         x = self.maxpool(xd4)
 
         x = self.down5(x)
-        h = x.shape[-2]
-        x = rearrange(x, 'b c h w -> b (h w) c')
-        x = self.down5_trans(x)
-        x = rearrange(x, 'b (h w) c -> b c h w', h=h)
+        # h = x.shape[-2]
+        # x = rearrange(x, 'b c h w -> b (h w) c')
+        # x = self.down5_trans(x)
+        # x = rearrange(x, 'b (h w) c -> b c h w', h=h)
 
         """Every step in the expansive path consists of an upsampling of the
         feature map followed by a 2x2 convolution (“up-convolution”) that
