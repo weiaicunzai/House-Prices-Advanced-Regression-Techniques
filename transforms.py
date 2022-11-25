@@ -8,6 +8,7 @@ import types
 import collections
 
 import cv2
+# import mmcv
 import numpy as np
 
 import torch
@@ -20,6 +21,8 @@ _cv2_pad_to_str = {
     'reflect': cv2.BORDER_REFLECT_101,
     'symmetric': cv2.BORDER_REFLECT
 }
+INTER_MODE = {'NEAREST': cv2.INTER_NEAREST, 'BILINEAR': cv2.INTER_LINEAR, 'BICUBIC': cv2.INTER_CUBIC}
+
 
 class Compose:
     """Composes several transforms together.
@@ -48,22 +51,56 @@ class Compose:
 class Resize:
     """Resize an image and an mask to given size
     Args:
-        size: expected output size of each edge, can be int or iterable with (w, h)
+        size: expected output size of each edge, can be int or iterable with (h, w)
+        if range is given:
+            resize image to size  [h * s, w * s],  s is sampled from range .
     """
 
-    def __init__(self, size):
+    def __init__(self, size=None, range=None):
 
-        if isinstance(size, int):
-            self.size = (size, size)
-        elif isinstance(size, Iterable) and len(size) == 2:
-            self.size = size
-        else:
-            raise TypeError('size should be iterable with size 2 or int')
+        if size is not None:
+            if isinstance(size, int):
+                self.size = (size, size)
+            elif isinstance(size, Iterable) and len(size) == 2:
+                self.size = size
+            else:
+                raise TypeError('size should be iterable with size 2 or int')
+
+        elif range is not None:
+            if isinstance(range, Iterable) and len(range) == 2:
+                self.range = range
+            else:
+                raise TypeError('size should be iterable with size 2 or int')
+
+        # elif range:
+            # raise ValueError(' size and range should be set least one')
+
+        # print(range, size)
+        # assert  range is not None and size is None
+        if not (range is None) ^  (size is None):
+            raise ValueError('can not both be set or not set')
+
+        self.size = size
+        self.range = range
+        # if range is None and size is None:
+            # print()
+
+    # def random
 
     def __call__(self, img, mask):
 
-        resized_img = cv2.resize(img, self.size)
-        resized_mask = cv2.resize(mask, self.size, interpolation=cv2.INTER_NEAREST)
+        # size = self.size
+
+        if self.range:
+            ratio = random.uniform(*self.range)
+            resized_img = cv2.resize(img, (0, 0), fx=ratio, fy=ratio) 
+            resized_mask = cv2.resize(mask, (0, 0), fx=ratio, fy=ratio, interpolation=cv2.INTER_NEAREST)
+
+        if self.size:
+            h, w = self.size
+            size = (w, h)
+            resized_img = cv2.resize(img, size)
+            resized_mask = cv2.resize(mask, size, interpolation=cv2.INTER_NEAREST)
 
         return resized_img, resized_mask
 
@@ -81,10 +118,26 @@ def crop(img, i, j, h, w):
     if not _is_numpy_image(img):
         raise TypeError('img should be numpy image. Got {}'.format(type(img)))
 
-    if len(img.shape) == 3:
-        return img[i:i + h, j:j + w, :]
-    if len(img.shape) == 2:
-        return img[i:i + h, j:j + w]
+    # print(type(img))
+    # mg[i:i + h, j: j+ w, ...]
+    return img[i:i + h, j: j+ w, ...]
+
+    # print(type(tmp), 'cccc')
+
+    # return tmp
+    # print(img.shape, type(img))
+    # import sys; sys.exit()
+    #if len(img.shape) == 3:
+        #return img[i:i + h, j:j + w, :]
+        #return img[i:i + h, j:j + w, :]
+    #if len(img.shape) == 2:
+        #return img[i:i + h, j:j + w, ...]
+
+    # print(img.shape, type(img), '------------------------------')
+
+    # return img
+    # return
+    #print()
 
 def center_crop(img, output_size, fill=0):
     if isinstance(output_size, numbers.Number):
@@ -138,7 +191,7 @@ def pad(img, padding, fill=0, padding_mode='constant'):
     if not isinstance(padding_mode, str):
         raise TypeError('Got inappropriate padding_mode arg')
     if isinstance(padding,
-                  collections.Sequence) and len(padding) not in [2, 4]:
+                  collections.abc.Sequence) and len(padding) not in [2, 4]:
         raise ValueError(
             "Padding must be an int or a 2, or 4 element tuple, not a " +
             "{} element tuple".format(len(padding)))
@@ -148,10 +201,10 @@ def pad(img, padding, fill=0, padding_mode='constant'):
 
     if isinstance(padding, int):
         pad_left = pad_right = pad_top = pad_bottom = padding
-    if isinstance(padding, collections.Sequence) and len(padding) == 2:
+    if isinstance(padding, collections.abc.Sequence) and len(padding) == 2:
         pad_left = pad_right = padding[0]
         pad_top = pad_bottom = padding[1]
-    if isinstance(padding, collections.Sequence) and len(padding) == 4:
+    if isinstance(padding, collections.abc.Sequence) and len(padding) == 4:
         pad_left = padding[0]
         pad_top = padding[1]
         pad_right = padding[2]
@@ -200,19 +253,26 @@ class RandomCrop(object):
                 will result in [2, 1, 1, 2, 3, 4, 4, 3]
     """
     def __init__(self,
-                 size,
-                 padding=None,
-                 pad_if_needed=False,
-                 fill=0,
-                 padding_mode='constant'):
-        if isinstance(size, numbers.Number):
-            self.size = (int(size), int(size))
+                #  size,
+                crop_size,
+                #  padding=None,
+                pad_if_needed=False,
+                pad_value=0,
+                seg_pad_value=255,
+                cat_max_ratio=1.):
+                #  padding_mode='constant'):
+        if isinstance(crop_size, numbers.Number):
+            self.crop_size = (int(crop_size), int(crop_size))
         else:
-            self.size = size
-        self.padding = padding
+            self.crop_size = crop_size
+        # self.padding = padding
         self.pad_if_needed = pad_if_needed
-        self.fill = fill
-        self.padding_mode = padding_mode
+        # self.fill = fill
+        # self.padding_mode = padding_mode
+        self.pad_value= pad_value
+        self.seg_pad_value = seg_pad_value
+        #self.ignore_value = ignore_value,
+        self.cat_max_ratio = cat_max_ratio
 
     @staticmethod
     def get_params(img, output_size):
@@ -225,11 +285,12 @@ class RandomCrop(object):
         """
         h, w = img.shape[:2]
         th, tw = output_size
+        # print(img.shape[:2], output_size)
         if w == tw and h == th:
             return 0, 0, h, w
 
-        i = random.randint(0, h - th)
-        j = random.randint(0, w - tw)
+        i = random.randint(0, max(h - th, 0))
+        j = random.randint(0, max(w - tw, 0))
         return i, j, th, tw
 
     def __call__(self, img, mask):
@@ -239,42 +300,86 @@ class RandomCrop(object):
         Returns:
             numpy ndarray: Cropped image.
         """
-        if self.padding is not None:
-            img = pad(img, self.padding, self.fill, self.padding_mode)
-            mask = pad(mask, self.padding, self.fill, self.padding_mode)
+        #if self.padding is not None:
+        #    img = pad(img, self.padding, self.pad_value, self.padding_mode)
+        #    mask = pad(mask, self.padding, self.seg_pad_value, self.padding_mode)
 
         # pad the width if needed
-        if self.pad_if_needed and img.shape[1] < self.size[1]:
-            left_pad = int((self.size[1] - img.shape[1]) / 2)
-            right_pad = self.size[1] - img.shape[1] - left_pad
+        if self.pad_if_needed and img.shape[1] < self.crop_size[1]:
+        # if self.pad_if_needed and img.shape[1] < self.crop_size[1]:
+            left_pad = int((self.crop_size[1] - img.shape[1]) / 2)
+            right_pad = self.crop_size[1] - img.shape[1] - left_pad
             #img = pad(img, (self.size[1] - img.shape[1], 0), self.fill,
             #            self.padding_mode)
-            img = pad(img, (left_pad, 0, right_pad, 0), self.fill,
-                        self.padding_mode)
+            img = pad(img, (left_pad, 0, right_pad, 0), self.pad_value,
+                        # self.padding_mode)
+                        'constant')
             #mask = pad(mask, (self.size[1] - mask.shape[1], 0), self.fill,
             #            self.padding_mode)
-            mask = pad(mask, (left_pad, 0, right_pad, 0), self.fill,
-                        self.padding_mode)
+            mask = pad(mask, (left_pad, 0, right_pad, 0), self.seg_pad_value,
+                        # self.padding_mode)
+                        'constant')
         # pad the height if needed
-        if self.pad_if_needed and img.shape[0] < self.size[0]:
-            top_pad = int((self.size[0] - img.shape[0]) / 2)
-            bot_pad = self.size[0] - img.shape[0] - top_pad
+        if self.pad_if_needed and img.shape[0] < self.crop_size[0]:
+            top_pad = int((self.crop_size[0] - img.shape[0]) / 2)
+            bot_pad = self.crop_size[0] - img.shape[0] - top_pad
             #img = pad(img, (0, self.size[0] - img.shape[0]), self.fill,
             #            self.padding_mode)
             #mask = pad(mask, (0, self.size[0] - mask.shape[0]), self.fill,
             #            self.padding_mode)
-            img = pad(img, (0, top_pad, 0, bot_pad), self.fill,
-                        self.padding_mode)
-            mask = pad(mask, (0, top_pad, 0, bot_pad), self.fill,
-                        self.padding_mode)
+            img = pad(img, (0, top_pad, 0, bot_pad), self.pad_value,
+                        'constant')
+            mask = pad(mask, (0, top_pad, 0, bot_pad), self.seg_pad_value,
+                        # self.padding_mode)
+                        'constant')
 
-        i, j, h, w = self.get_params(img, self.size)
+        #print(self.pad_if_needed)
+        i, j, h, w = self.get_params(img, self.crop_size)
+        # print(i,j,h,w)
 
-        return crop(img, i, j, h, w), crop(mask, i, j, h, w)
+        # for self.
+        # mask = crop(mask, i, j, h, w)
+
+        #for 
+        if self.cat_max_ratio < 1:
+            for _ in range(10):
+                # print(_)
+                mask_temp = crop(mask, i, j, h, w)
+                labels, cnt = np.unique(mask_temp, return_counts=True)
+                cnt = cnt[labels != self.seg_pad_value]
+
+                thresh = np.sum(cnt) / (mask_temp.shape[0] * mask_temp.shape[1])
+                # print(thresh)
+                if thresh < 0.75:
+                    continue
+
+                if len(cnt) > 1 and np.max(cnt) / np.sum(
+                    cnt) < self.cat_max_ratio:
+                    break
+
+                i, j, h, w = self.get_params(img, self.crop_size)
+
+
+        # print(self.cat_max_ratio)
+        # import sys; sys.exit()
+        # print(type(img), i, j, i + h, j + w, img.shape)
+        img = crop(img, i, j, h, w)
+        mask = crop(mask, i, j, h, w)
+
+        # print(img, 'ccc')
+        # print(mask, 'fff')
+        # print(type(img))
+        # import sys; sys.exit()
+        return img, mask
+
+
+
+
+        #return crop(img, i, j, h, w), crop(mask, i, j, h, w)
 
     def __repr__(self):
-        return self.__class__.__name__ + '(size={0}, padding={1})'.format(
-            self.size, self.padding)
+        return self.__class__.__name__ + '(size={0})'.format(
+            self.crop_size)
 
 #class RandomScale:
 #    """Randomly scaling an image (from 0.5 to 2.0]), the output image and mask
@@ -324,6 +429,7 @@ class RandomCrop(object):
 #        )
 #        mask = cv2.copyMakeBorder(
 #            mask,
+
 #            diff_h // 2,
 #            diff_h - diff_h // 2,
 #            diff_w // 2,
@@ -342,42 +448,168 @@ class RandomCrop(object):
 #
 #        return img, mask
 
-class RandomRotation:
-    """Rotate the image by angle
 
+def rotate(img, angle, resample='BILINEAR', expand=False, center=None, value=0):
+    """Rotate the image by angle.
     Args:
-        angle: rotated angle
-        value: value used for filling the empty pixel after rotating,
-               should use ignore class index
+        img (PIL Image): PIL Image to be rotated.
+        angle ({float, int}): In degrees clockwise order.
+        resample ({NEAREST, BILINEAR, BICUBIC}, optional):
+            An optional resampling filter.
+            See http://pillow.readthedocs.io/en/3.4.x/handbook/concepts.html#filters
+            If omitted, or if the image has mode "1" or "P", it is set to PIL.Image.NEAREST.
+        expand (bool, optional): Optional expansion flag.
+            If true, expands the output image to make it large enough to hold the entire rotated image.
+            If false or omitted, make the output image the same size as the input image.
+            Note that the expand flag assumes rotation around the center and no translation.
+        center (2-tuple, optional): Optional center of rotation.
+            Origin is the upper left corner.
+            Default is the center of the image.
+    """
+    imgtype = img.dtype
+    if not _is_numpy_image(img):
+        raise TypeError('img should be PIL Image. Got {}'.format(type(img)))
+    #h, w, _ = img.shape
+    h, w = img.shape[:2]
+    point = center or (w/2, h/2)
+    M = cv2.getRotationMatrix2D(point, angle=-angle, scale=1)
 
+    if expand:
+        if center is None:
+            cos = np.abs(M[0, 0])
+            sin = np.abs(M[0, 1])
+
+            # compute the new bounding dimensions of the image
+            nW = int((h * sin) + (w * cos))
+            nH = int((h * cos) + (w * sin))
+
+            # adjust the rotation matrix to take into account translation
+            M[0, 2] += (nW / 2) - point[0]
+            M[1, 2] += (nH / 2) - point[1]
+
+            # perform the actual rotation and return the image
+            dst = cv2.warpAffine(img, M, (nW, nH), borderValue=value)
+        else:
+            xx = []
+            yy = []
+            for point in (np.array([0, 0, 1]), np.array([w-1, 0, 1]), np.array([w-1, h-1, 1]), np.array([0, h-1, 1])):
+                target = M@point
+                xx.append(target[0])
+                yy.append(target[1])
+            nh = int(math.ceil(max(yy)) - math.floor(min(yy)))
+            nw = int(math.ceil(max(xx)) - math.floor(min(xx)))
+            # adjust the rotation matrix to take into account translation
+            M[0, 2] += (nw - w)/2
+            M[1, 2] += (nh - h)/2
+            dst = cv2.warpAffine(img, M, (nw, nh), flags=INTER_MODE[resample], value=value)
+    else:
+        dst = cv2.warpAffine(img, M, (w, h), flags=INTER_MODE[resample], value=value)
+    return dst.astype(imgtype)
+
+class RandomRotation(object):
+    """Rotate the image by angle.
+    Args:
+        degrees (sequence or float or int): Range of degrees to select from.
+            If degrees is a number instead of sequence like (min, max), the range of degrees
+            will be (-degrees, +degrees) clockwise order.
+        resample ({CV.Image.NEAREST, CV.Image.BILINEAR, CV.Image.BICUBIC}, optional):
+            An optional resampling filter.
+            See http://pillow.readthedocs.io/en/3.4.x/handbook/concepts.html#filters
+            If omitted, or if the image has mode "1" or "P", it is set to NEAREST.
+        expand (bool, optional): Optional expansion flag.
+            If true, expands the output to make it large enough to hold the entire rotated image.
+            If false or omitted, make the output image the same size as the input image.
+            Note that the expand flag assumes rotation around the center and no translation.
+        center (2-tuple, optional): Optional center of rotation.
+            Origin is the upper left corner.
+            Default is the center of the image.
     """
 
-    def __init__(self, p=0.5, angle=10, fill=0):
+    def __init__(self, degrees, resample='BILINEAR', expand=False, center=None, pad_value=0, seg_pad_value=255):
+        if isinstance(degrees, numbers.Number):
+            if degrees < 0:
+                raise ValueError("If degrees is a single number, it must be positive.")
+            self.degrees = (-degrees, degrees)
+        else:
+            if len(degrees) != 2:
+                raise ValueError("If degrees is a sequence, it must be of len 2.")
+            self.degrees = degrees
 
-        if not (isinstance(angle, numbers.Number) and angle > 0):
-            raise ValueError('angle must be a positive number.')
+        self.resample = resample
+        self.expand = expand
+        self.center = center
+        self.pad_value = pad_value
+        self.seg_pad_value = seg_pad_value
 
-        self.angle = angle
-        self.value = fill
-        self.p = p
+    @staticmethod
+    def get_params(degrees):
+        """Get parameters for ``rotate`` for a random rotation.
+        Returns:
+            sequence: params to be passed to ``rotate`` for random rotation.
+        """
+        angle = random.uniform(degrees[0], degrees[1])
 
-    def __call__(self, image, mask):
-        if random.random() > self.p:
-            return image, mask
+        return angle
 
-        angle = random.uniform(-self.angle, self.angle)
-        image_center = tuple(np.array(image.shape[1::-1]) / 2)
-        rot_mat = cv2.getRotationMatrix2D(image_center, angle, 1.0)
-        image = cv2.warpAffine(
-            image, rot_mat, image.shape[1::-1])
-        mask = cv2.warpAffine(
-            mask, rot_mat, mask.shape[1::-1],
-            flags=cv2.INTER_NEAREST,
-            borderMode=cv2.BORDER_CONSTANT,
-            borderValue=self.value
-        )
+    def __call__(self, img, mask):
+        """
+            img (np.ndarray): Image to be rotated.
+        Returns:
+            np.ndarray: Rotated image.
+        """
 
-        return image, mask
+        angle = self.get_params(self.degrees)
+
+        img = rotate(img, angle, self.resample, self.expand, self.center, value=self.pad_value)
+        mask = rotate(mask, angle, 'NEAREST', self.expand, self.center, value=self.seg_pad_value)
+
+        return img, mask
+
+    def __repr__(self):
+        format_string = self.__class__.__name__ + '(degrees={0}'.format(self.degrees)
+        format_string += ', resample={0}'.format(self.resample)
+        format_string += ', expand={0}'.format(self.expand)
+        if self.center is not None:
+            format_string += ', center={0}'.format(self.center)
+        format_string += ')'
+        return format_string
+
+#class RandomRotation:
+#    """Rotate the image by angle
+#
+#    Args:
+#        angle: rotated angle
+#        value: value used for filling the empty pixel after rotating,
+#               should use ignore class index
+#
+#    """
+#
+#    def __init__(self, p=0.5, angle=10, fill=0):
+#
+#        if not (isinstance(angle, numbers.Number) and angle > 0):
+#            raise ValueError('angle must be a positive number.')
+#
+#        self.angle = angle
+#        self.value = fill
+#        self.p = p
+#
+#    def __call__(self, image, mask):
+#        if random.random() > self.p:
+#            return image, mask
+#
+#        angle = random.uniform(-self.angle, self.angle)
+#        image_center = tuple(np.array(image.shape[1::-1]) / 2)
+#        rot_mat = cv2.getRotationMatrix2D(image_center, angle, 1.0)
+#        image = cv2.warpAffine(
+#            image, rot_mat, image.shape[1::-1])
+#        mask = cv2.warpAffine(
+#            mask, rot_mat, mask.shape[1::-1],
+#            flags=cv2.INTER_NEAREST,
+#            borderMode=cv2.BORDER_CONSTANT,
+#            borderValue=self.value
+#        )
+#
+#        return image, mask
 
 class RandomVerticalFlip:
     """Horizontally flip the given opencv image with given probability p.
@@ -922,6 +1154,127 @@ class RandomScaleCrop:
 #
 #finish = time.time()
 #print(finish - start)
+class PhotoMetricDistortion(object):
+    """Apply photometric distortion to image sequentially, every transformation
+    is applied with a probability of 0.5. The position of random contrast is in
+    second or second to last.
+    1. random brightness
+    2. random contrast (mode 0)
+    3. convert color from BGR to HSV
+    4. random saturation
+    5. random hue
+    6. convert color from HSV to BGR
+    7. random contrast (mode 1)
+    Args:
+        brightness_delta (int): delta of brightness.
+        contrast_range (tuple): range of contrast.
+        saturation_range (tuple): range of saturation.
+        hue_delta (int): delta of hue.
+    """
+
+    def __init__(self,
+                 brightness_delta=32,
+                 contrast_range=(0.5, 1.5),
+                 saturation_range=(0.5, 1.5),
+                 hue_delta=18):
+        self.brightness_delta = brightness_delta
+        self.contrast_lower, self.contrast_upper = contrast_range
+        self.saturation_lower, self.saturation_upper = saturation_range
+        self.hue_delta = hue_delta
+
+    def convert(self, img, alpha=1, beta=0):
+        """Multiple with alpha and add beat with clip."""
+        img = img.astype(np.float32) * alpha + beta
+        img = np.clip(img, 0, 255)
+        return img.astype(np.uint8)
+
+    def brightness(self, img):
+        """Brightness distortion."""
+        #if random.randint(2):
+        if random.randint(0, 1):
+            return self.convert(
+                img,
+                beta=random.uniform(-self.brightness_delta,
+                                    self.brightness_delta))
+        return img
+
+    def contrast(self, img):
+        """Contrast distortion."""
+        if random.randint(0, 1):
+            return self.convert(
+                img,
+                alpha=random.uniform(self.contrast_lower, self.contrast_upper))
+        return img
+
+    def saturation(self, img):
+        """Saturation distortion."""
+        if random.randint(0, 1):
+            # img = mmcv.bgr2hsv(img)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+            img[:, :, 1] = self.convert(
+                img[:, :, 1],
+                alpha=random.uniform(self.saturation_lower,
+                                     self.saturation_upper))
+            #img = mmcv.hsv2bgr(img)
+            img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
+        return img
+
+    def hue(self, img):
+        """Hue distortion."""
+        if random.randint(0, 1):
+            # img = mmcv.bgr2hsv(img)
+            # img = mmcv.bgr2hsv(img)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+            img[:, :,
+                0] = (img[:, :, 0].astype(int) +
+                      random.randint(-self.hue_delta, self.hue_delta)) % 180
+            # img = mmcv.hsv2bgr(img)
+            img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
+        return img
+
+    #def __call__(self, results):
+    def __call__(self, img, gt_seg, **kwargs):
+        """Call function to perform photometric distortion on images.
+        Args:
+            results (dict): Result dict from loading pipeline.
+        Returns:
+            dict: Result dict with images distorted.
+        """
+
+        # img = results['img']
+        # random brightness
+        img = self.brightness(img)
+
+        # mode == 0 --> do random contrast first
+        # mode == 1 --> do random contrast last
+        #mode = random.randint(2)
+        mode = random.randint(0, 1)
+        if mode == 1:
+            img = self.contrast(img)
+
+        # random saturation
+        img = self.saturation(img)
+
+        # random hue
+        img = self.hue(img)
+
+        # random contrast
+        if mode == 0:
+            img = self.contrast(img)
+
+        #results['img'] = img
+        #return results
+        return img, gt_seg
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += (f'(brightness_delta={self.brightness_delta}, '
+                     f'contrast_range=({self.contrast_lower}, '
+                     f'{self.contrast_upper}), '
+                     f'saturation_range=({self.saturation_lower}, '
+                     f'{self.saturation_upper}), '
+                     f'hue_delta={self.hue_delta})')
+        return repr_str
 
 class CenterCrop(object):
     """Crops the given numpy ndarray at the center.
@@ -949,3 +1302,45 @@ class CenterCrop(object):
 
     def __repr__(self):
         return self.__class__.__name__ + '(size={0})'.format(self.size)
+
+
+
+img_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/img.jpg'
+img_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)/testA_16.bmp'
+
+crop_size=(480, 480)
+trans = Resize(range=[0.5, 1.5])
+trans1 = RandomRotation(degrees=90, expand=True)
+trans2 = RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True)
+trans3 = RandomVerticalFlip()
+trans4 = RandomHorizontalFlip()
+
+#trans = Compose([
+#    Resize(range=[0.5, 1.5]),
+#    RandomRotation(degrees=90, expand=True, pad_value=0, seg_pad_value=255),
+#])
+# trans5 = ColorJitter(p=0, brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5)
+trans5 = PhotoMetricDistortion()
+
+img = cv2.imread(img_path)
+
+print(img.shape)
+
+import time
+# start = time.time()
+# for _ in range(1000):
+    # img, mask = trans5(img, img[:, :, 0])
+    # _ = trans5(img, img[:, :, 0])
+# finish = time.time()
+img, mask = trans5(img, img[:, :, 0])
+img, mask = trans(img, mask)
+img, mask = trans1(img, mask)
+img, mask = trans2(img, mask)
+img, mask = trans3(img, mask)
+img, mask = trans4(img, mask)
+# print(finish - start)
+# print(img.shape, mask.shape)
+
+print(img.shape, mask.shape)
+cv2.imwrite('src.jpg', img)
+cv2.imwrite('src1.jpg', mask)
