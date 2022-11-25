@@ -45,7 +45,8 @@ export CUDA_VISIBLE_DEVICES=1
 
 #python eval.py -net hybird -weight  /data/by/House-Prices-Advanced-Regression-Techniques/checkpoints/trans_branch_SGD_473_Thursday_06_May_2021_02h_09m_29s/654-best.pth  -b 1 -dataset Glas -branch trans
 #python eval.py -net hybird -weight  /data/by/House-Prices-Advanced-Regression-Techniques/checkpoints/trans_branch_SGD_473_Thursday_06_May_2021_05h_27m_38s/765-best.pth  -b 1 -dataset Glas -branch trans
-python eval.py -net  unet -weight  /data/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Wednesday_12_May_2021_01h_10m_01s/894-best.pth  -b 1 -dataset Glas
+#python eval.py -net  unet -weight  /data/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Wednesday_12_May_2021_01h_10m_01s/894-best.pth  -b 1 -dataset Glas
+python eval.py -net  unet -weight  /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Thursday_24_November_2022_10h_37m_08s/708-best.pth -b 1 -dataset Glas
 
 
 
