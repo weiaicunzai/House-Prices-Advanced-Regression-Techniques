@@ -20,7 +20,8 @@ class Glas(Dataset):
             download_url(url, path, file_name, md5=md5)
 
         self.class_names = ['background', 'gland']
-        self.ignore_index = -100
+        # self.ignore_index = -100
+        self.ignore_index = 255
         self.class_num = len(self.class_names)
 
         data_folder = os.path.join(path, 'Warwick QU Dataset (Released 2016_07_08)')
@@ -64,6 +65,8 @@ class Glas(Dataset):
 
         image = self.images[index]
         label = self.labels[index]
+        #print(np.unique(label))
+        label[label > 0] = 1
         if self.transforms is not None:
             image, label = self.transforms(image, label)
 
