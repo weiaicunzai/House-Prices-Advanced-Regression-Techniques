@@ -12,6 +12,7 @@ import skimage.morphology as morph
 
 
 import transforms
+import mmtransform
 from dataset import CamVid, VOC2012Aug, Glas, PreTraining
 from conf import settings
 from metric import eval_metrics, gland_accuracy_object_level
@@ -437,17 +438,43 @@ def data_loader(args, image_set):
         raise ValueError('datset {} not supported'.format(args.dataset))
 
     if image_set == 'train':
-        trans = transforms.Compose([
-            transforms.EncodingLable(),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomVerticalFlip(),
-            transforms.RandomRotation(15, fill=0),
-            transforms.RandomScaleCrop(settings.IMAGE_SIZE),
-            transforms.RandomGaussianBlur(),
-            transforms.ColorJitter(0.4, 0.4),
-            transforms.ToTensor(),
-            transforms.Normalize(settings.MEAN, settings.STD),
-        ])
+        img_scale = (522, 775)
+        img_norm_cfg = dict(
+        # mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
+            mean=[200.2103937666394, 130.35073328696086, 200.7955948978498],
+            std=[33.296002816472495, 62.533182555417845, 42.21131635702842],
+            to_rgb=True
+        )
+        crop_size = (480, 480)
+
+
+        trans = mmtransform.Compose(
+            [
+                mmtransform.Resize(img_scale=img_scale, ratio_range=(0.5, 2.0)),
+                mmtransform.RandomRotate(prob=1, degree=(0, 90), auto_bound=True),
+                mmtransform.RandomCrop(crop_size),
+                mmtransform.RandomFlip(prob=0.5, direction='horizontal'),
+                mmtransform.RandomFlip(prob=0.5, direction='vertical'),
+                mmtransform.PhotoMetricDistortion(),
+                mmtransform.Normalize(**img_norm_cfg),
+                mmtransform.Pad(size=crop_size, pad_val=0, seg_pad_val=255),
+                mmtransform.DefaultFormatBundle(),
+#my_trans.append(RandomCrop(crop_size=crop_size, cat_max_ratio=0.75))
+#my_trans.append(RandomFlip(prob=0.5))
+#my_trans.append(PhotoMetricDistortion())
+            ]
+        )
+        #trans = transforms.Compose([
+        #    transforms.EncodingLable(),
+        #    transforms.RandomHorizontalFlip(),
+        #    transforms.RandomVerticalFlip(),
+        #    transforms.RandomRotation(15, fill=0),
+        #    transforms.RandomScaleCrop(settings.IMAGE_SIZE),
+        #    transforms.RandomGaussianBlur(),
+        #    transforms.ColorJitter(0.4, 0.4),
+        #    transforms.ToTensor(),
+        #    transforms.Normalize(settings.MEAN, settings.STD),
+        #])
 
     elif image_set == 'val':
         trans = transforms.Compose([
