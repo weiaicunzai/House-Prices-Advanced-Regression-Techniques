@@ -448,22 +448,22 @@ def data_loader(args, image_set):
         crop_size = (480, 480)
 
 
-        trans = mmtransform.Compose(
-            [
-                mmtransform.Resize(img_scale=img_scale, ratio_range=(0.5, 2.0)),
-                mmtransform.RandomRotate(prob=1, degree=(0, 90), auto_bound=True),
-                mmtransform.RandomCrop(crop_size),
-                mmtransform.RandomFlip(prob=0.5, direction='horizontal'),
-                mmtransform.RandomFlip(prob=0.5, direction='vertical'),
-                mmtransform.PhotoMetricDistortion(),
-                mmtransform.Normalize(**img_norm_cfg),
-                mmtransform.Pad(size=crop_size, pad_val=0, seg_pad_val=255),
-                mmtransform.DefaultFormatBundle(),
-#my_trans.append(RandomCrop(crop_size=crop_size, cat_max_ratio=0.75))
-#my_trans.append(RandomFlip(prob=0.5))
-#my_trans.append(PhotoMetricDistortion())
-            ]
-        )
+#        trans = mmtransform.Compose(
+#            [
+#                mmtransform.Resize(img_scale=img_scale, ratio_range=(0.5, 2.0)),
+#                mmtransform.RandomRotate(prob=1, degree=(0, 90), auto_bound=True),
+#                mmtransform.RandomCrop(crop_size),
+#                mmtransform.RandomFlip(prob=0.5, direction='horizontal'),
+#                mmtransform.RandomFlip(prob=0.5, direction='vertical'),
+#                mmtransform.PhotoMetricDistortion(),
+#                mmtransform.Normalize(**img_norm_cfg),
+#                mmtransform.Pad(size=crop_size, pad_val=0, seg_pad_val=255),
+#                mmtransform.DefaultFormatBundle(),
+##my_trans.append(RandomCrop(crop_size=crop_size, cat_max_ratio=0.75))
+##my_trans.append(RandomFlip(prob=0.5))
+##my_trans.append(PhotoMetricDistortion())
+#            ]
+#        )
         #trans = transforms.Compose([
         #    transforms.EncodingLable(),
         #    transforms.RandomHorizontalFlip(),
@@ -475,6 +475,18 @@ def data_loader(args, image_set):
         #    transforms.ToTensor(),
         #    transforms.Normalize(settings.MEAN, settings.STD),
         #])
+
+        crop_size=(480, 480)
+        trans = transforms.Compose([
+            transforms.PhotoMetricDistortion(),
+            transforms.Resize(range=[0.5, 1.5]),
+            transforms.RandomRotation(degrees=90, expand=True),
+            transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True),
+            transforms.RandomVerticalFlip(),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(settings.MEAN, settings.STD)
+        ])
 
     elif image_set == 'val':
         trans = transforms.Compose([
@@ -499,13 +511,13 @@ def data_loader(args, image_set):
 
     if image_set == 'test':
         data_loader = torch.utils.data.DataLoader(
-            dataset, batch_size=1, num_workers=4, shuffle=False, pin_memory=True)
+            dataset, batch_size=1, num_workers=4, shuffle=False, pin_memory=True, persistent_workers=True)
     elif image_set == 'val':
         data_loader = torch.utils.data.DataLoader(
-            dataset, batch_size=args.b, num_workers=4, shuffle=False, pin_memory=True)
+            dataset, batch_size=args.b, num_workers=4, shuffle=False, pin_memory=True, persistent_workers=True)
     else:
         data_loader = torch.utils.data.DataLoader(
-                dataset, batch_size=args.b, num_workers=4, shuffle=False, pin_memory=True)
+                dataset, batch_size=args.b, num_workers=4, shuffle=False, pin_memory=True, persistent_workers=True)
 
     return data_loader
 
