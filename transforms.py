@@ -91,9 +91,11 @@ class Resize:
 
         # size = self.size
 
+
+
         if self.range:
             ratio = random.uniform(*self.range)
-            resized_img = cv2.resize(img, (0, 0), fx=ratio, fy=ratio) 
+            resized_img = cv2.resize(img, (0, 0), fx=ratio, fy=ratio)
             resized_mask = cv2.resize(mask, (0, 0), fx=ratio, fy=ratio, interpolation=cv2.INTER_NEAREST)
 
         if self.size:
@@ -102,6 +104,7 @@ class Resize:
             resized_img = cv2.resize(img, size)
             resized_mask = cv2.resize(mask, size, interpolation=cv2.INTER_NEAREST)
 
+        # print(np.unique(resized_mask))
         return resized_img, resized_mask
 
 def crop(img, i, j, h, w):
@@ -340,7 +343,7 @@ class RandomCrop(object):
         # for self.
         # mask = crop(mask, i, j, h, w)
 
-        #for 
+        #for
         if self.cat_max_ratio < 1:
             for _ in range(10):
                 # print(_)
@@ -488,7 +491,7 @@ def rotate(img, angle, resample='BILINEAR', expand=False, center=None, value=0):
             M[1, 2] += (nH / 2) - point[1]
 
             # perform the actual rotation and return the image
-            dst = cv2.warpAffine(img, M, (nW, nH), borderValue=value)
+            dst = cv2.warpAffine(img, M, (nW, nH), flags=INTER_MODE[resample], borderValue=value)
         else:
             xx = []
             yy = []
@@ -561,6 +564,7 @@ class RandomRotation(object):
         angle = self.get_params(self.degrees)
 
         img = rotate(img, angle, self.resample, self.expand, self.center, value=self.pad_value)
+        # print(np.unique(mask))
         mask = rotate(mask, angle, 'NEAREST', self.expand, self.center, value=self.seg_pad_value)
 
         return img, mask
@@ -628,7 +632,7 @@ class RandomVerticalFlip:
         Returns:
             flipped image
         """
-        if random.random() < self.p:
+        if random.random() <= self.p:
             img = cv2.flip(img, 0)
             mask = cv2.flip(mask, 0)
 
@@ -651,7 +655,7 @@ class RandomHorizontalFlip:
         Returns:
             flipped image
         """
-        if random.random() < self.p:
+        if random.random() <= self.p:
             img = cv2.flip(img, 1)
             mask = cv2.flip(mask, 1)
 
@@ -1000,14 +1004,62 @@ class Normalize:
         """
         assert torch.is_tensor(img) and img.ndimension() == 3, 'not an image tensor'
 
+        if img.ndim < 3:
+            raise ValueError('Expected tensor to be a tensor image of size (..., C, H, W). Got tensor.size() = '
+                         '{}.'.format(img.size()))
+
         if not self.inplace:
             img = img.clone()
 
         mean = torch.tensor(self.mean, dtype=torch.float32)
         std = torch.tensor(self.std, dtype=torch.float32)
-        img.sub_(mean[:, None, None]).div_(std[:, None, None])
+
+        if (std == 0).any():
+            raise ValueError('std evaluated to zero after conversion to {}, leading to division by zero.'.format(dtype))
+        if mean.ndim == 1:
+            mean = mean.view(-1, 1, 1)
+        if std.ndim == 1:
+            std = std.view(-1, 1, 1)
+
+        img.sub_(mean).div_(std)
+
+        # img.sub_(mean[:, None, None]).div_(std[:, None, None])
 
         return img, mask
+
+#class Normalize:
+#    """Normalize a torch tensor (H, W, BGR order) with mean and standard deviation
+#    and does nothing to mask tensor
+#
+#    for each channel in torch tensor:
+#        ``input[channel] = (input[channel] - mean[channel]) / std[channel]``
+#    Args:
+#        mean: sequence of means for each channel
+#        std: sequence of stds for each channel
+#    """
+#
+#    def __init__(self, mean, std, inplace=False):
+#        self.mean = mean
+#        self.std = std
+#        self.inplace = inplace
+#
+#    def __call__(self, img, mask):
+#        """
+#        Args:
+#            (H W C) format numpy array range from [0, 255]
+#        Returns:
+#            (H W C) format numpy array in float32 range from [0, 1]
+#        """
+#        assert torch.is_tensor(img) and img.ndimension() == 3, 'not an image tensor'
+#
+#        if not self.inplace:
+#            img = img.clone()
+#
+#        mean = torch.tensor(self.mean, dtype=torch.float32)
+#        std = torch.tensor(self.std, dtype=torch.float32)
+#        img.sub_(mean[:, None, None]).div_(std[:, None, None])
+#
+#        return img, mask
 
 
 class EncodingLable:
@@ -1305,42 +1357,42 @@ class CenterCrop(object):
 
 
 
-img_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/img.jpg'
-img_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)/testA_16.bmp'
-
-crop_size=(480, 480)
-trans = Resize(range=[0.5, 1.5])
-trans1 = RandomRotation(degrees=90, expand=True)
-trans2 = RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True)
-trans3 = RandomVerticalFlip()
-trans4 = RandomHorizontalFlip()
-
-#trans = Compose([
-#    Resize(range=[0.5, 1.5]),
-#    RandomRotation(degrees=90, expand=True, pad_value=0, seg_pad_value=255),
-#])
-# trans5 = ColorJitter(p=0, brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5)
-trans5 = PhotoMetricDistortion()
-
-img = cv2.imread(img_path)
-
-print(img.shape)
-
-import time
-# start = time.time()
-# for _ in range(1000):
-    # img, mask = trans5(img, img[:, :, 0])
-    # _ = trans5(img, img[:, :, 0])
-# finish = time.time()
-img, mask = trans5(img, img[:, :, 0])
-img, mask = trans(img, mask)
-img, mask = trans1(img, mask)
-img, mask = trans2(img, mask)
-img, mask = trans3(img, mask)
-img, mask = trans4(img, mask)
-# print(finish - start)
-# print(img.shape, mask.shape)
-
-print(img.shape, mask.shape)
-cv2.imwrite('src.jpg', img)
-cv2.imwrite('src1.jpg', mask)
+#img_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/img.jpg'
+#img_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)/testA_16.bmp'
+#
+#crop_size=(480, 480)
+#trans = Resize(range=[0.5, 1.5])
+#trans1 = RandomRotation(degrees=90, expand=True)
+#trans2 = RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True)
+#trans3 = RandomVerticalFlip()
+#trans4 = RandomHorizontalFlip()
+#
+##trans = Compose([
+##    Resize(range=[0.5, 1.5]),
+##    RandomRotation(degrees=90, expand=True, pad_value=0, seg_pad_value=255),
+##])
+## trans5 = ColorJitter(p=0, brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5)
+#trans5 = PhotoMetricDistortion()
+#
+#img = cv2.imread(img_path)
+#
+#print(img.shape)
+#
+#import time
+## start = time.time()
+## for _ in range(1000):
+#    # img, mask = trans5(img, img[:, :, 0])
+#    # _ = trans5(img, img[:, :, 0])
+## finish = time.time()
+#img, mask = trans5(img, img[:, :, 0])
+#img, mask = trans(img, mask)
+#img, mask = trans1(img, mask)
+#img, mask = trans2(img, mask)
+#img, mask = trans3(img, mask)
+#img, mask = trans4(img, mask)
+## print(finish - start)
+## print(img.shape, mask.shape)
+#
+#print(img.shape, mask.shape)
+#cv2.imwrite('src.jpg', img)
+#cv2.imwrite('src1.jpg', mask)
