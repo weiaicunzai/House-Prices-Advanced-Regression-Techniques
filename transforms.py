@@ -351,10 +351,10 @@ class RandomCrop(object):
                 labels, cnt = np.unique(mask_temp, return_counts=True)
                 cnt = cnt[labels != self.seg_pad_value]
 
-                thresh = np.sum(cnt) / (mask_temp.shape[0] * mask_temp.shape[1])
+                # thresh = np.sum(cnt) / (mask_temp.shape[0] * mask_temp.shape[1])
                 # print(thresh)
-                if thresh < 0.75:
-                    continue
+                # if thresh < 0.75:
+                    # continue
 
                 if len(cnt) > 1 and np.max(cnt) / np.sum(
                     cnt) < self.cat_max_ratio:
@@ -1359,40 +1359,46 @@ class CenterCrop(object):
 
 #img_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/img.jpg'
 #img_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)/testA_16.bmp'
-#
+##
 #crop_size=(480, 480)
-#trans = Resize(range=[0.5, 1.5])
-#trans1 = RandomRotation(degrees=90, expand=True)
-#trans2 = RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True)
-#trans3 = RandomVerticalFlip()
-#trans4 = RandomHorizontalFlip()
+#trans = Resize(range=[0.5, 1.5])  # 0.0004977783894538879
+#trans1 = RandomRotation(degrees=90, expand=True)  # 0.0017581235980987549
+#trans2 = RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True) # 0.007527546215057373
+## trans
+##trans3 = RandomVerticalFlip()
+##trans4 = RandomHorizontalFlip()
+##
 #
-##trans = Compose([
-##    Resize(range=[0.5, 1.5]),
-##    RandomRotation(degrees=90, expand=True, pad_value=0, seg_pad_value=255),
-##])
-## trans5 = ColorJitter(p=0, brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5)
-#trans5 = PhotoMetricDistortion()
+#
+#
+###trans = Compose([
+###    Resize(range=[0.5, 1.5]),
+###    RandomRotation(degrees=90, expand=True, pad_value=0, seg_pad_value=255),
+###])
+### trans5 = ColorJitter(p=0, brightness=0.5, contrast=0.5, saturation=0.5, hue=0.5)
+#trans5 = PhotoMetricDistortion() # 0.0068617223739624025
 #
 #img = cv2.imread(img_path)
-#
-#print(img.shape)
-#
+##
+##print(img.shape)
+##
 #import time
-## start = time.time()
-## for _ in range(1000):
-#    # img, mask = trans5(img, img[:, :, 0])
-#    # _ = trans5(img, img[:, :, 0])
-## finish = time.time()
-#img, mask = trans5(img, img[:, :, 0])
-#img, mask = trans(img, mask)
-#img, mask = trans1(img, mask)
-#img, mask = trans2(img, mask)
-#img, mask = trans3(img, mask)
-#img, mask = trans4(img, mask)
-## print(finish - start)
-## print(img.shape, mask.shape)
-#
-#print(img.shape, mask.shape)
-#cv2.imwrite('src.jpg', img)
-#cv2.imwrite('src1.jpg', mask)
+#start = time.time()
+#times = 10000
+#for _ in range(times):
+#    _, _ = trans5(img, img[:, :, 0])
+##    # _ = trans5(img, img[:, :, 0])
+#finish = time.time()
+#print((finish - start) / times)
+##img, mask = trans5(img, img[:, :, 0])
+##img, mask = trans(img, mask)
+##img, mask = trans1(img, mask)
+##img, mask = trans2(img, mask)
+##img, mask = trans3(img, mask)
+##img, mask = trans4(img, mask)
+### print(finish - start)
+### print(img.shape, mask.shape)
+##
+##print(img.shape, mask.shape)
+##cv2.imwrite('src.jpg', img)
+##cv2.imwrite('src1.jpg', mask)

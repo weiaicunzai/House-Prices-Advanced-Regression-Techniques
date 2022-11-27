@@ -51,20 +51,25 @@ def train(net, train_dataloader, val_dataloader, writer, args):
 
     scaler = GradScaler()
 
-    with torch.profiler.profile(
-        activities=[
-            torch.profiler.ProfilerActivity.CPU,
-            torch.profiler.ProfilerActivity.CUDA],
-        schedule=torch.profiler.schedule(
-            wait=1,
-            warmup=1,
-            active=2),
-        on_trace_ready=torch.profiler.tensorboard_trace_handler('./result', worker_name='worker0'),
-        record_shapes=True,
-        # profile_memory=True,  # This will take 1 to 2 minutes. Setting it to False could greatly speedup.
-        with_stack=True
-    ) as p:
+    #with torch.profiler.profile(
+    #    activities=[
+    #        torch.profiler.ProfilerActivity.CPU,
+    #        torch.profiler.ProfilerActivity.CUDA],
+    #    schedule=torch.profiler.schedule(
+    #        wait=1,
+    #        warmup=1,
+    #        active=2),
+    #    on_trace_ready=torch.profiler.tensorboard_trace_handler('./result', worker_name='worker0'),
+    #    record_shapes=True,
+    #    # profile_memory=True,  # This will take 1 to 2 minutes. Setting it to False could greatly speedup.
+    #    with_stack=True
+    #) as p:
+    #images, masks = next(train_iterloader)
     for iter_idx, (images, masks) in enumerate(train_iterloader):
+        # images, masks = images, masks
+
+    # for iter_idx in range(1000000):
+
 
         eval_start = time.time()
             # total = time.time() - batch_start
@@ -74,7 +79,7 @@ def train(net, train_dataloader, val_dataloader, writer, args):
 
         #for batch_idx, images in enumerate(train_loader):
 
-
+        # images =
 
         if args.gpu:
             images = images.cuda()
@@ -128,7 +133,7 @@ def train(net, train_dataloader, val_dataloader, writer, args):
                 lr=optimizer.param_groups[0]['lr'],
                 #beta=optimizer.param_groups[0]['betas'][0],
                 #time=batch_finish - train_start
-                time=eval_finish - eval_start
+                time=time.time()- eval_start
             ))
 
         # print log

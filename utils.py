@@ -480,7 +480,7 @@ def data_loader(args, image_set):
         trans = transforms.Compose([
             # transforms.PhotoMetricDistortion(),
             transforms.Resize(range=[0.5, 1.5]),
-            # transforms.RandomRotation(degrees=90, expand=True),
+            #transforms.RandomRotation(degrees=90, expand=True),
             transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True),
             transforms.RandomVerticalFlip(),
             transforms.RandomHorizontalFlip(),
@@ -518,6 +518,7 @@ def data_loader(args, image_set):
     else:
         data_loader = torch.utils.data.DataLoader(
                 dataset, batch_size=args.b, num_workers=4, shuffle=True, pin_memory=True, persistent_workers=True)
+                #prefetch_factor=2)
 
     return data_loader
 
