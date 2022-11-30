@@ -328,6 +328,7 @@ def evaluate(net, val_dataloader, writer, args):
                 # print(gt_seg_map.shape)
                 ori_shape = gt_seg_map.shape[:2]
 
+                t1 = time.time()
                 pred = test_aug.aug_test(
                     imgs=imgs,
                     flip_direction=img_meta['flip'],
@@ -339,10 +340,16 @@ def evaluate(net, val_dataloader, writer, args):
                     num_classes=2
                 )
                 # print(pred.shape, gt_seg_map.shape)
+                t2 = time.time()
+                print(test_aug.aug_test,  t2 - t1)
 
                 # print(pred.shape, gt_seg_map.shape)
+                t3 = time.time()
                 _, _, F1, dice, _, haus = gland_accuracy_object_level(pred, gt_seg_map)
                 # print(F1, dice, haus)
+                t4 = time.time()
+                print(gland_accuracy_object_level, t4 - t3)
+                print()
 
                 res = np.array([F1, dice, haus])
 
