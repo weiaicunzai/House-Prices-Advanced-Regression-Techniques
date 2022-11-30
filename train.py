@@ -43,7 +43,7 @@ def train(net, train_dataloader, val_dataloader, writer, args):
 
 
     #batch_start = time.time()
-    train_start = time.time()
+    # train_start = time.time()
     total_load_time = 0
     train_iterloader = IterLoader(train_dataloader)
     #for batch_idx, (images, masks) in enumerate(train_loader):
@@ -65,13 +65,16 @@ def train(net, train_dataloader, val_dataloader, writer, args):
     #    with_stack=True
     #) as p:
     #images, masks = next(train_iterloader)
+    train_t = time.time()
     for iter_idx, (images, masks) in enumerate(train_iterloader):
         # images, masks = images, masks
 
     # for iter_idx in range(1000000):
+        # iter_start = time.time()
 
+        data_time = time.time() - train_t
 
-        eval_start = time.time()
+        # eval_start = time.time()
             # total = time.time() - batch_start
             # print(epoch, time.time() - batch_start)
             # print(total / (batch_idx + 1))
@@ -118,10 +121,11 @@ def train(net, train_dataloader, val_dataloader, writer, args):
         if args.poly:
             train_scheduler.step()
 
+        iter_time = time.time() - train_t
 
         if (iter_idx + 1) % 50 == 0:
             print(('Training Iter:{iter} [{trained_samples}/{total_samples}] '
-                    'Lr:{lr:0.8f} Loss:{loss:0.4f} Data loading time:{time:0.4f}s').format(
+                    'Lr:{lr:0.8f} Loss:{loss:0.4f}, Iter time:{iter_time:0.4f}s Data loading time:{data_time:0.4f}s').format(
                 loss=loss.item(),
                 # epoch=epoch,
                 # iter=batch_idx,
@@ -133,30 +137,33 @@ def train(net, train_dataloader, val_dataloader, writer, args):
                 lr=optimizer.param_groups[0]['lr'],
                 #beta=optimizer.param_groups[0]['betas'][0],
                 #time=batch_finish - train_start
-                time=time.time()- eval_start
+                # time=time.time()- eval_start
+                iter_time=iter_time,
+                data_time=data_time,
             ))
+
 
         # print log
         #if args.eval_iter % (iter_idx + 1) == 0:
         if (iter_idx + 1) % args.eval_iter == 0:
-            eval_finish = time.time()
+            #eval_finish = time.time()
 
-            #print(('Training Epoch:{epoch} [{trained_samples}/{total_samples}] '
-            print(('Training Iter:{iter} [{trained_samples}/{total_samples}] '
-                    'Lr:{lr:0.8f} Loss:{loss:0.4f} Data loading time:{time:0.4f}s').format(
-                loss=loss.item(),
-                # epoch=epoch,
-                # iter=batch_idx,
-                iter=iter_idx,
-                # trained_samples=iter_idx * args.b + len(images),
-                trained_samples=iter_idx * args.b + len(images),
-                # total_samples=len(train_dataset),
-                total_samples=total_iter,
-                lr=optimizer.param_groups[0]['lr'],
-                #beta=optimizer.param_groups[0]['betas'][0],
-                #time=batch_finish - train_start
-                time=eval_finish - eval_start
-            ))
+            ##print(('Training Epoch:{epoch} [{trained_samples}/{total_samples}] '
+            #print(('Training Iter:{iter} [{trained_samples}/{total_samples}] '
+            #        'Lr:{lr:0.8f} Loss:{loss:0.4f} Data loading time:{time:0.4f}s').format(
+            #    loss=loss.item(),
+            #    # epoch=epoch,
+            #    # iter=batch_idx,
+            #    iter=iter_idx,
+            #    # trained_samples=iter_idx * args.b + len(images),
+            #    trained_samples=iter_idx * args.b + len(images),
+            #    # total_samples=len(train_dataset),
+            #    total_samples=total_iter,
+            #    lr=optimizer.param_groups[0]['lr'],
+            #    #beta=optimizer.param_groups[0]['betas'][0],
+            #    #time=batch_finish - train_start
+            #    time=eval_finish - eval_start
+            #))
 
 
             #total_load_time += batch_finish - batch_start
@@ -204,6 +211,10 @@ def train(net, train_dataloader, val_dataloader, writer, args):
             #    total_load_time,
             #    total_load_time / total_training * 100
             #))
+
+
+
+        train_t = time.time()
 
 
 def evaluate(net, val_dataloader, writer, args):

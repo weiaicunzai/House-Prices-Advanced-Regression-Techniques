@@ -58,10 +58,18 @@ class Glas(Dataset):
         self.std = (0.13057256006459803, 0.24522816688399154, 0.16553457394913107)
         self.image_set = image_set
 
+        self.times = 30000
+
     def __len__(self):
-        return len(self.images)
+        if self.image_set == 'train':
+            return len(self.images) * self.times
+        else:
+            return len(self.images)
 
     def __getitem__(self, index):
+
+        if self.image_set == 'train':
+            index = index % len(self.images)
 
         image = self.images[index]
         label = self.labels[index]
