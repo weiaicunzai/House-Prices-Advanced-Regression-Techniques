@@ -5,6 +5,7 @@ import re
 import sys
 sys.path.append(os.getcwd())
 
+from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -12,7 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from torch.cuda.amp import GradScaler
 from torch.cuda.amp import autocast
-print(torch.cuda.amp.__file__)
+#print(torch.cuda.amp.__file__)
 
 import transforms
 import utils
@@ -21,9 +22,10 @@ from dataset.camvid import CamVid
 from dataset.voc2012 import VOC2012Aug
 #from dataset.camvid_lmdb import CamVid
 from lr_scheduler import PolyLR
-from metric import eval_metrics
+from metric import eval_metrics, gland_accuracy_object_level
 from loss import SegmentLevelLoss
 from dataloader import IterLoader
+import test_aug
 
 
 
@@ -51,6 +53,18 @@ def train(net, train_dataloader, val_dataloader, writer, args):
 
     scaler = GradScaler()
 
+    best = {
+        'testA_F1': 0,
+        'testA_Dice': 0,
+        'testA_Haus': 9999,
+        'testB_F1': 0,
+        'testB_Dice': 0,
+        'testB_Haus': 9999,
+        'total_F1': 0,
+        'total_Dice': 0,
+        'total_Haus': 9999,
+    }
+
     #with torch.profiler.profile(
     #    activities=[
     #        torch.profiler.ProfilerActivity.CPU,
@@ -60,11 +74,12 @@ def train(net, train_dataloader, val_dataloader, writer, args):
     #        warmup=1,
     #        active=2),
     #    on_trace_ready=torch.profiler.tensorboard_trace_handler('./result', worker_name='worker0'),
-    #    record_shapes=True,
+    #    # record_shapes=True,
     #    # profile_memory=True,  # This will take 1 to 2 minutes. Setting it to False could greatly speedup.
     #    with_stack=True
     #) as p:
     #images, masks = next(train_iterloader)
+
     for iter_idx, (images, masks) in enumerate(train_iterloader):
         # images, masks = images, masks
 
@@ -110,7 +125,15 @@ def train(net, train_dataloader, val_dataloader, writer, args):
             optimizer.step()
             optimizer.zero_grad()
 
+        #p.step()
+
+        #if iter_idx > 1000:
+            #break
+        # bs = len(images)
+        del images
+        del masks
         #loss =  loss_l2(preds, masks)
+        # print(torch.cuda.utilization())
 
         #if not args.baseline:
         #    seg_loss = loss_seg(preds, masks)
@@ -119,44 +142,79 @@ def train(net, train_dataloader, val_dataloader, writer, args):
             train_scheduler.step()
 
 
+        # print((iter_idx + 1) % 50)
         if (iter_idx + 1) % 50 == 0:
-            print(('Training Iter:{iter} [{trained_samples}/{total_samples}] '
+            # print((iter_idx + 1) % 50)
+            print(('Training Iter: [{iter}/{total_iter}] '
                     'Lr:{lr:0.8f} Loss:{loss:0.4f} Data loading time:{time:0.4f}s').format(
                 loss=loss.item(),
                 # epoch=epoch,
-                # iter=batch_idx,
-                iter=iter_idx,
+                iter=(iter_idx+1),
                 # trained_samples=iter_idx * args.b + len(images),
-                trained_samples=iter_idx * args.b + len(images),
+                # trained_samples=iter_idx * args.b + bs,
                 # total_samples=len(train_dataset),
-                total_samples=total_iter,
+                total_iter = total_iter,
+                # total_samples=total_iter,
                 lr=optimizer.param_groups[0]['lr'],
                 #beta=optimizer.param_groups[0]['betas'][0],
                 #time=batch_finish - train_start
-                time=time.time()- eval_start
+                time=time.time() - eval_start
             ))
 
+        # continue
         # print log
         #if args.eval_iter % (iter_idx + 1) == 0:
+        # print(args.eval_iter)
         if (iter_idx + 1) % args.eval_iter == 0:
-            eval_finish = time.time()
+
+            # evaluate()
+
+
+            print('evaluating.........')
+            total, testA, testB = evaluate(net, val_loader, writer, args)
+
+            print('total: F1 {}, Dice:{}, Haus:{}'.format(*total))
+            print('testA: F1 {}, Dice:{}, Haus:{}'.format(*testA))
+            print('testB: F1 {}, Dice:{}, Haus:{}'.format(*testB))
+
+            #if best[0] <
+            # if best['testA_F1'] < testA[0]:
+                # best['testA_F1'] = test
+
+            best['testA_F1'] = max(best['testA_F1'], testA[0])
+            best['testA_Dice'] = max(best['testA_Dice'], testA[1])
+            best['testA_Haus'] = min(best['testA_Haus'], testA[2])
+
+
+            best['testB_F1'] = max(best['testB_F1'], testB[0])
+            best['testB_Dice'] = max(best['testB_Dice'], testB[1])
+            best['testB_Haus'] = min(best['testB_Haus'], testB[2])
+
+            best['total_F1'] = max(best['total_F1'], total[0])
+            best['total_Dice'] = max(best['total_Dice'], total[1])
+            best['total_Haus'] = min(best['total_Haus'], total[2])
+
+            print(best)
+
+
+            #eval_finish = time.time()
 
             #print(('Training Epoch:{epoch} [{trained_samples}/{total_samples}] '
-            print(('Training Iter:{iter} [{trained_samples}/{total_samples}] '
-                    'Lr:{lr:0.8f} Loss:{loss:0.4f} Data loading time:{time:0.4f}s').format(
-                loss=loss.item(),
-                # epoch=epoch,
-                # iter=batch_idx,
-                iter=iter_idx,
-                # trained_samples=iter_idx * args.b + len(images),
-                trained_samples=iter_idx * args.b + len(images),
-                # total_samples=len(train_dataset),
-                total_samples=total_iter,
-                lr=optimizer.param_groups[0]['lr'],
-                #beta=optimizer.param_groups[0]['betas'][0],
-                #time=batch_finish - train_start
-                time=eval_finish - eval_start
-            ))
+            #print(('Training Iter:{iter} [{trained_samples}/{total_samples}] '
+            #        'Lr:{lr:0.8f} Loss:{loss:0.4f} Data loading time:{time:0.4f}s').format(
+            #    loss=loss.item(),
+            #    # epoch=epoch,
+            #    # iter=batch_idx,
+            #    iter=iter_idx,
+            #    # trained_samples=iter_idx * args.b + len(images),
+            #    trained_samples=iter_idx * args.b + len(images),
+            #    # total_samples=len(train_dataset),
+            #    total_samples=total_iter,
+            #    lr=optimizer.param_groups[0]['lr'],
+            #    #beta=optimizer.param_groups[0]['betas'][0],
+            #    #time=batch_finish - train_start
+            #    time=eval_finish - eval_start
+            #))
 
 
             #total_load_time += batch_finish - batch_start
@@ -210,84 +268,166 @@ def evaluate(net, val_dataloader, writer, args):
     net.eval()
         # test_loss = 0.0
 
-    test_start = time.time()
-    iou = 0
-    all_acc = 0
-    acc = 0
+    # F1, Dice, Haus
+    testA = np.array([0, 0, 9999.0])
+    testB = np.array([0, 0, 9999.0])
+    total = np.array([0, 0, 9999.0])
+    # best =  np.array([0, 0, 9999])
+
+    count_A = 0
+    count_B = 0
+
+    # testA = {
+    #     "F1" : 0,
+    #     'Dice' : 0,
+    #     'Haus' : 9999,
+    # }
+    # best = {
+    #     "F1" : 0,
+    #     'Dice' : 0,
+    #     'Haus' : 9999,
+    # }
+
+    # testB = {
+    #     "F1" : 0,
+    #     'Dice' : 0,
+    #     'Haus' : 9999,
+    # }
+
+    # total = {
+    #     'F1'
+    # }
+
+    # test_start = time.time()
+    # iou = 0
+    # all_acc = 0
+    # acc = 0
 
     valid_dataset = val_dataloader.dataset
     cls_names = valid_dataset.class_names
     ig_idx = valid_dataset.ignore_index
-    print('ignore index is {}'.format(ig_idx))
-    for images, masks in val_dataloader:
+    # for images, masks in val_dataloader:
+    with torch.no_grad():
+        for img_metas in tqdm(val_dataloader):
         #for images in validation_loader:
+            for img_meta in img_metas:
 
-            if args.gpu:
-                images = images.cuda()
-                masks = masks.cuda()
-                #masks = images
+                # img_meta = img_meta[0]
+                # print(img_meta)
+                imgs = img_meta['imgs']
+                gt_seg_map = img_meta['seg_map']
+                # print(img_meta.keys())
+                # print(gt_seg_map.shape)
+                ori_shape = gt_seg_map.shape[:2]
 
-            with torch.no_grad():
-                preds = net(images)
-                # loss = loss_fn(preds, masks)
-                # loss = loss.mean()
-            # continue
+                pred = test_aug.aug_test(
+                    imgs=imgs,
+                    flip_direction=img_meta['flip'],
+                    ori_shape=ori_shape,
+                    model=net,
+                    crop_size=(480, 480),
+                    stride=(256, 256),
+                    mode='slide',
+                    num_classes=2
+                )
+                # print(pred.shape, gt_seg_map.shape)
+
+                # print(pred.shape, gt_seg_map.shape)
+                _, _, F1, dice, _, haus = gland_accuracy_object_level(pred, gt_seg_map)
+                # print(F1, dice, haus)
+
+                res = np.array([F1, dice, haus])
+
+                img_name = img_meta['img_name']
+                # print(img_name)
+
+                if 'testA' in img_name:
+                    count_A += 1
+                    #print(img_name)
+                    testA += res
+
+                if 'testB' in img_name:
+                    count_B += 1
+                    testB += res
+
+    total = (testA + testB) / (count_A + count_B)
+
+    testA = testA / count_A
+    testB = testB / count_B
 
 
-            #if not args.baseline:
-            #    seg_loss = loss_seg(preds, masks)
-            #    loss[seg_loss == 1] *= args.alpha
 
-            # test_loss += loss.item()
+    return total, testA, testB
 
-            preds = preds.argmax(dim=1)
-            #tmp_all_acc, tmp_acc, tmp_mean_iou = eval_metrics(
-            #    , masks.detach().cpu().numpy(), len(cls_names), ig_idx
-            #)
-            tmp_all_acc, tmp_acc, tmp_iou = eval_metrics(
-                preds.detach().cpu().numpy(),
-                masks.detach().cpu().numpy(),
-                len(cls_names),
-                ignore_index=ig_idx,
-                metrics='mIoU',
-                nan_to_num=-1
-            )
+    # import sys; sys.exit()
 
-            all_acc += tmp_all_acc * len(images)
-            acc += tmp_acc * len(images)
-            iou += tmp_iou * len(images)
+
+        #    if args.gpu:
+        #        images = images.cuda()
+        #        masks = masks.cuda()
+        #        #masks = images
+
+        #    with torch.no_grad():
+        #        preds = net(images)
+        #        # loss = loss_fn(preds, masks)
+        #        # loss = loss.mean()
+        #    # continue
+
+
+        #    #if not args.baseline:
+        #    #    seg_loss = loss_seg(preds, masks)
+        #    #    loss[seg_loss == 1] *= args.alpha
+
+        #    # test_loss += loss.item()
+
+        #    preds = preds.argmax(dim=1)
+        #    #tmp_all_acc, tmp_acc, tmp_mean_iou = eval_metrics(
+        #    #    , masks.detach().cpu().numpy(), len(cls_names), ig_idx
+        #    #)
+        #    tmp_all_acc, tmp_acc, tmp_iou = eval_metrics(
+        #        preds.detach().cpu().numpy(),
+        #        masks.detach().cpu().numpy(),
+        #        len(cls_names),
+        #        ignore_index=ig_idx,
+        #        metrics='mIoU',
+        #        nan_to_num=-1
+        #    )
+
+        #    all_acc += tmp_all_acc * len(images)
+        #    acc += tmp_acc * len(images)
+        #    iou += tmp_iou * len(images)
 
     # continue
-    all_acc /= len(val_dataloader.dataset)
-    acc /= len(val_dataloader.dataset)
-    iou /= len(val_dataloader.dataset)
-    test_finish = time.time()
-    print('Evaluation time comsumed:{:.2f}s'.format(test_finish - test_start))
-    print('Iou for each class:')
-    utils.print_eval(cls_names, iou)
-    print('Acc for each class:')
-    utils.print_eval(cls_names, acc)
-    #print('%, '.join([':'.join([str(n), str(round(i, 2))]) for n, i in zip(cls_names, iou)]))
-    #iou = iou.tolist()
-    #iou = [i for i in iou if iou.index(i) != ig_idx]
-    miou = sum(iou) / len(iou)
-    print('Epoch {}  Mean iou {:.4f}  All Pixel Acc {:.4f}'.format(epoch, miou, all_acc))
-    #print('%, '.join([':'.join([str(n), str(round(a, 2))]) for n, a in zip(cls_names, acc)]))
-    #print('All acc {:.2f}%'.format(all_acc))
+    #all_acc /= len(val_dataloader.dataset)
+    #acc /= len(val_dataloader.dataset)
+    #iou /= len(val_dataloader.dataset)
+    #test_finish = time.time()
+    #print('Evaluation time comsumed:{:.2f}s'.format(test_finish - test_start))
+    #print('Iou for each class:')
+    #utils.print_eval(cls_names, iou)
+    #print('Acc for each class:')
+    #utils.print_eval(cls_names, acc)
+    ##print('%, '.join([':'.join([str(n), str(round(i, 2))]) for n, i in zip(cls_names, iou)]))
+    ##iou = iou.tolist()
+    ##iou = [i for i in iou if iou.index(i) != ig_idx]
+    #miou = sum(iou) / len(iou)
+    #print('Epoch {}  Mean iou {:.4f}  All Pixel Acc {:.4f}'.format(epoch, miou, all_acc))
+    ##print('%, '.join([':'.join([str(n), str(round(a, 2))]) for n, a in zip(cls_names, acc)]))
+    ##print('All acc {:.2f}%'.format(all_acc))
 
-    utils.visualize_scalar(
-        writer,
-        'Test/mIOU',
-        miou,
-        epoch,
-    )
+    #utils.visualize_scalar(
+    #    writer,
+    #    'Test/mIOU',
+    #    miou,
+    #    epoch,
+    #)
 
-    utils.visualize_scalar(
-        writer,
-        'Test/Acc',
-        all_acc,
-        epoch,
-    )
+    #utils.visualize_scalar(
+    #    writer,
+    #    'Test/Acc',
+    #    all_acc,
+    #    epoch,
+    #)
 
     #utils.visualize_scalar(
     #    writer,
@@ -421,6 +561,7 @@ if __name__ == '__main__':
     utils.visualize_network(writer, net, tensor)
 
     train(net, train_loader, val_loader, writer, args)
+    #evaluate(net, val_loader, writer, args)
 
     #optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.wd)
     #optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
