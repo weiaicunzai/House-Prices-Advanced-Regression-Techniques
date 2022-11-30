@@ -45,10 +45,12 @@ class Glas(Dataset):
         if image_set == 'val':
             label_re = 'test[A|B]' +  '_[0-9]+_' + 'anno' + '\.bmp'
 
+        self.image_names = []
         for bmp in glob.iglob(search_path, recursive=True):
             if re.search(label_re, bmp):
                 self.labels.append(cv2.imread(bmp, -1))
                 bmp = bmp.replace('_anno', '')
+                self.image_names.append(os.path.basename(bmp))
             #elif re.search(image_re, bmp):
                 self.images.append(cv2.imread(bmp, -1))
 
@@ -75,10 +77,18 @@ class Glas(Dataset):
         label = self.labels[index]
         #print(np.unique(label))
         label[label > 0] = 1
+
+
+        if self.image_set != 'train':
+            img_meta = self.transforms(image, label)
+            img_meta['img_name'] = self.image_names[index]
+            return img_meta
+
         if self.transforms is not None:
-            image, label = self.transforms(image, label)
+                image, label = self.transforms(image, label)
 
         return image, label
+
 
 
 

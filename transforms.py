@@ -343,24 +343,24 @@ class RandomCrop(object):
         # for self.
         # mask = crop(mask, i, j, h, w)
 
-        #for
-        if self.cat_max_ratio < 1:
-            for _ in range(10):
-                # print(_)
-                mask_temp = crop(mask, i, j, h, w)
-                labels, cnt = np.unique(mask_temp, return_counts=True)
-                cnt = cnt[labels != self.seg_pad_value]
+        # consume time
+        #if self.cat_max_ratio < 1:
+        #    for _ in range(10):
+        #        # print(_)
+        #        mask_temp = crop(mask, i, j, h, w)
+        #        labels, cnt = np.unique(mask_temp, return_counts=True)
+        #        cnt = cnt[labels != self.seg_pad_value]
 
-                # thresh = np.sum(cnt) / (mask_temp.shape[0] * mask_temp.shape[1])
-                # print(thresh)
-                # if thresh < 0.75:
-                    # continue
+        #        # thresh = np.sum(cnt) / (mask_temp.shape[0] * mask_temp.shape[1])
+        #        # print(thresh)
+        #        # if thresh < 0.75:
+        #            # continue
 
-                if len(cnt) > 1 and np.max(cnt) / np.sum(
-                    cnt) < self.cat_max_ratio:
-                    break
+        #        if len(cnt) > 1 and np.max(cnt) / np.sum(
+        #            cnt) < self.cat_max_ratio:
+        #            break
 
-                i, j, h, w = self.get_params(img, self.crop_size)
+        #        i, j, h, w = self.get_params(img, self.crop_size)
 
 
         # print(self.cat_max_ratio)
@@ -504,9 +504,10 @@ def rotate(img, angle, resample='BILINEAR', expand=False, center=None, value=0):
             # adjust the rotation matrix to take into account translation
             M[0, 2] += (nw - w)/2
             M[1, 2] += (nh - h)/2
-            dst = cv2.warpAffine(img, M, (nw, nh), flags=INTER_MODE[resample], value=value)
+            dst = cv2.warpAffine(img, M, (nw, nh), flags=INTER_MODE[resample], borderValue=value)
     else:
-        dst = cv2.warpAffine(img, M, (w, h), flags=INTER_MODE[resample], value=value)
+        # print('cccccc')
+        dst = cv2.warpAffine(img, M, (w, h), flags=INTER_MODE[resample], borderValue=value)
     return dst.astype(imgtype)
 
 class RandomRotation(object):
@@ -528,7 +529,7 @@ class RandomRotation(object):
             Default is the center of the image.
     """
 
-    def __init__(self, degrees, resample='BILINEAR', expand=False, center=None, pad_value=0, seg_pad_value=255):
+    def __init__(self, degrees, p=0.5, resample='BILINEAR', expand=False, center=None, pad_value=0, seg_pad_value=255):
         if isinstance(degrees, numbers.Number):
             if degrees < 0:
                 raise ValueError("If degrees is a single number, it must be positive.")
@@ -543,6 +544,7 @@ class RandomRotation(object):
         self.center = center
         self.pad_value = pad_value
         self.seg_pad_value = seg_pad_value
+        self.p = p
 
     @staticmethod
     def get_params(degrees):
@@ -561,6 +563,12 @@ class RandomRotation(object):
             np.ndarray: Rotated image.
         """
 
+        if random.random() > self.p:
+            # print('skip')
+            return img, mask
+
+        # print('not skip')
+
         angle = self.get_params(self.degrees)
 
         img = rotate(img, angle, self.resample, self.expand, self.center, value=self.pad_value)
@@ -577,6 +585,53 @@ class RandomRotation(object):
             format_string += ', center={0}'.format(self.center)
         format_string += ')'
         return format_string
+
+
+class RandomApply(torch.nn.Module):
+    """Apply randomly a list of transformations with a given probability.
+
+    .. note::
+        In order to script the transformation, please use ``torch.nn.ModuleList`` as input instead of list/tuple of
+        transforms as shown below:
+
+        >>> transforms = transforms.RandomApply(torch.nn.ModuleList([
+        >>>     transforms.ColorJitter(),
+        >>> ]), p=0.3)
+        >>> scripted_transforms = torch.jit.script(transforms)
+
+        Make sure to use only scriptable transformations, i.e. that work with ``torch.Tensor``, does not require
+        `lambda` functions or ``PIL.Image``.
+
+    Args:
+        transforms (sequence or torch.nn.Module): list of transformations
+        p (float): probability
+    """
+
+    def __init__(self, transforms, p=0.5):
+        super().__init__()
+        # _log_api_usage_once(self)
+        self.transforms = transforms
+        self.p = p
+
+    def forward(self, img, mask):
+        if random.random() <= self.p:
+        # if self.p < torch.rand(1):
+            return img, mask
+
+        for t in self.transforms:
+            img, mask = t(img, mask)
+        return img, mask
+
+
+    def __repr__(self) -> str:
+        format_string = self.__class__.__name__ + "("
+        format_string += f"\n    p={self.p}"
+        for t in self.transforms:
+            format_string += "\n"
+            format_string += f"    {t}"
+        format_string += "\n)"
+        return format_string
+
 
 #class RandomRotation:
 #    """Rotate the image by angle
@@ -1144,6 +1199,139 @@ class RandomScaleCrop:
 
         return img, mask
 
+
+class MultiScaleFlipAug(object):
+    """Return a set of MultiScale fliped Images"""
+
+
+    def __init__(self,
+                #  transforms,
+                #  img_scale,
+                # img_ratios=None,
+                 img_ratios,
+                 mean,
+                 std,
+                 transforms=None,
+                 flip=False,
+                 flip_direction='horizontal'):
+
+        img_ratios = img_ratios if isinstance(img_ratios,
+                                                  list) else [img_ratios]
+
+        self.flip = flip
+        self.img_ratios = img_ratios
+        self.flip_direction = flip_direction if isinstance(
+            flip_direction, list) else [flip_direction]
+
+
+        # normalize and to_tensor
+        self.transforms = transforms
+
+        for flip_direction in self.flip_direction:
+            assert flip_direction in ['vertical', 'horizontal']
+
+        self.mean = torch.tensor(mean, dtype=torch.float32)
+        self.std = torch.tensor(std, dtype=torch.float32)
+        # print(self.flip_direction, 'cccccccccccccccccccccccccc')
+
+    def construct_flip_param(self):
+
+        flip_aug = [False, True] if self.flip else [False]
+        if len(self.flip_direction) == 2:
+            flip_aug.append(True)
+
+
+        flip_direction = self.flip_direction.copy()
+        if self.flip:
+            flip_direction.append(flip_direction[0])
+
+        # print(flip_aug, flip_direction)
+        assert len(flip_aug) == len(flip_direction)
+
+        return list(zip(flip_aug, flip_direction))
+
+
+    def norm(self, img):
+
+        std = self.std
+        mean = self.mean
+
+        if (std == 0).any():
+            raise ValueError('std evaluated to zero after conversion to {}, leading to division by zero.'.format(dtype))
+        if mean.ndim == 1:
+            mean = mean.view(-1, 1, 1)
+        if std.ndim == 1:
+            std = std.view(-1, 1, 1)
+
+        return img.sub_(mean).div_(std)
+
+    def mask_to_tensor(self, mask):
+        mask = torch.from_numpy(mask).long()
+        return mask
+
+
+    def img_to_tensor(self, img):
+        img = img.transpose(2, 0, 1)
+        img = torch.from_numpy(img)
+        img = img.float() / 255.0
+
+        return img
+
+
+    def __call__(self, img, gt_seg):
+        """Call function to apply test time augment transforms on results.
+        Args:
+            results (dict): Result dict contains the data to transform.
+        Returns:
+           dict[str: list]: The augmented data, where each value is wrapped
+               into a list.
+        """
+
+        img_meta = {
+            "seg_map": None,
+            "imgs" : [],
+            "flip" : []
+        }
+
+        flip_param = self.construct_flip_param()
+
+        for ratio in self.img_ratios:
+
+            resized_img = cv2.resize(img, (0, 0), fx=ratio, fy=ratio)
+
+            for flip, direction in flip_param:
+
+                if flip:
+
+                    if direction == 'horizontal':
+                        flipped_img = cv2.flip(resized_img, 1)
+                        img_meta['flip'].append(direction)
+
+                    if direction == 'vertical':
+                        flipped_img = cv2.flip(resized_img, 0)
+                        img_meta['flip'].append(direction)
+
+                else:
+                    img_meta['flip'].append('none')
+                    flipped_img = resized_img
+
+                img_tensor = self.img_to_tensor(flipped_img)
+                norm_img = self.norm(img_tensor)
+
+                # normalize + to_tensor
+                # if self.transforms is not None:
+                    # for trans in self.transforms:
+                        # print(type(gt_seg), trans)
+                        # flipped_img, gt_seg = trans(flipped_img, gt_seg)
+                img_meta['imgs'].append(norm_img)
+
+        img_meta['seg_map'] = self.mask_to_tensor(gt_seg)
+        # print(img_meta['flip'])
+        # import sys; sys.exit()
+
+        return img_meta
+
+
 #from dataset.camvid import CamVid
 #
 #
@@ -1362,7 +1550,7 @@ class CenterCrop(object):
 ##
 #crop_size=(480, 480)
 #trans = Resize(range=[0.5, 1.5])  # 0.0004977783894538879
-#trans1 = RandomRotation(degrees=90, expand=True)  # 0.0017581235980987549
+#trans1 = RandomRotation(degrees=10, expand=True)  # 0.0017581235980987549
 #trans2 = RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True) # 0.007527546215057373
 ## trans
 ##trans3 = RandomVerticalFlip()

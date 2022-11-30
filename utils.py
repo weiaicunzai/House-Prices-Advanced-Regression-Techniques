@@ -12,7 +12,7 @@ import skimage.morphology as morph
 
 
 import transforms
-import mmtransform
+# import mmtransform
 from dataset import CamVid, VOC2012Aug, Glas, PreTraining
 from conf import settings
 from metric import eval_metrics, gland_accuracy_object_level
@@ -478,30 +478,57 @@ def data_loader(args, image_set):
 
         crop_size=(480, 480)
         trans = transforms.Compose([
-            # transforms.PhotoMetricDistortion(),
             transforms.Resize(range=[0.5, 1.5]),
-            #transforms.RandomRotation(degrees=90, expand=True),
+            # transforms.RandomRotation(degrees=90, expand=False),
+            transforms.RandomRotation(degrees=90, expand=True),
             transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True),
             transforms.RandomVerticalFlip(),
             transforms.RandomHorizontalFlip(),
+            transforms.RandomApply(
+                transforms=[transforms.PhotoMetricDistortion()]
+            ),
             transforms.ToTensor(),
             transforms.Normalize(settings.MEAN, settings.STD)
         ])
 
     elif image_set == 'val':
-        trans = transforms.Compose([
-            #transforms.RandomScaleCrop(settings.IMAGE_SIZE),
-            transforms.EncodingLable(),
-            transforms.CenterCrop(settings.IMAGE_SIZE, fill=dataset.ignore_index),
-            transforms.ToTensor(),
-            transforms.Normalize(settings.MEAN, settings.STD),
-        ])
+        #trans = transforms.Compose([
+        #    #transforms.RandomScaleCrop(settings.IMAGE_SIZE),
+        #    transforms.EncodingLable(),
+        #    transforms.CenterCrop(settings.IMAGE_SIZE, fill=dataset.ignore_index),
+        #    transforms.ToTensor(),
+        #    transforms.Normalize(settings.MEAN, settings.STD),
+        #])
+
+        trans = transforms.MultiScaleFlipAug(
+            img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
+            #flip=True,
+            flip=False,
+            # flip_direction=['horizontal', 'vertical'],
+            flip_direction=['horizontal'],
+            # transforms=[
+                # transforms.ToTensor(),
+                # transforms.Normalize(settings.MEAN, settings.STD),
+            # ]
+            mean=settings.MEAN,
+            std=settings.STD
+        )
 
     elif image_set in ['test', 'testA', 'testB']:
-        trans = transforms.Compose([
-            transforms.ToTensor(),
-            #transforms.Normalize(settings.MEAN, settings.STD),
-        ])
+        # trans = transforms.Compose([
+        #     transforms.ToTensor(),
+        #     #transforms.Normalize(settings.MEAN, settings.STD),
+        # ])
+        trans = transforms.MultiScaleFlipAug(
+            img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
+            flip=True,
+            # flip_direction=['horizontal', 'vertical'],
+            flip_direction=['horizontal'],
+            transforms=[
+                transforms.ToTensor(),
+                transforms.Normalize(settings.MEAN, settings.STD),
+            ]
+        )
 
     else:
         raise ValueError('image_set should be one of "train", "val", \
@@ -509,16 +536,29 @@ def data_loader(args, image_set):
 
     dataset.transforms = trans
 
+
+    def multiscale_collate(batch):
+
+        res = []
+        for img_meta in batch:
+            #res.append([img, gt_seg])
+            res.append(img_meta)
+
+        return res
+
     if image_set == 'test':
         data_loader = torch.utils.data.DataLoader(
             dataset, batch_size=1, num_workers=4, shuffle=False, pin_memory=True, persistent_workers=True)
     elif image_set == 'val':
         data_loader = torch.utils.data.DataLoader(
-            dataset, batch_size=args.b, num_workers=4, shuffle=False, pin_memory=True, persistent_workers=True)
+            dataset, batch_size=4, num_workers=4, shuffle=False, pin_memory=True, persistent_workers=True,
+            collate_fn=multiscale_collate)
     else:
         data_loader = torch.utils.data.DataLoader(
-                dataset, batch_size=args.b, num_workers=4, shuffle=True, pin_memory=True, persistent_workers=True)
-                #prefetch_factor=2)
+                dataset, batch_size=args.b, num_workers=4, shuffle=True, pin_memory=True, persistent_workers=True,
+
+                prefetch_factor=4
+                )
 
     return data_loader
 
