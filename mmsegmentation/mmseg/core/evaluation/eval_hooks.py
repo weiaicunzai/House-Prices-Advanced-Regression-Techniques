@@ -43,7 +43,7 @@ class EvalHook(_EvalHook):
                 'function')
 
         self._best_results = dict()
-            
+
 
         for metric in ['all_objF1', 'all_objDice', 'testA_objF1', 'testA_objDice', 'testB_objF1', 'testB_objDice']:
             self.greater_keys.append(metric)
@@ -60,7 +60,7 @@ class EvalHook(_EvalHook):
 
         # self.
 
-        self._best_score = { 
+        self._best_score = {
             'all_objF1' : 0,
             'all_objDice' : 0,
             'all_objHausdorff' : 10000,
@@ -70,7 +70,7 @@ class EvalHook(_EvalHook):
             'testB_objF1' : 0,
             'testB_objDice' : 0,
             'testB_objHausdorff' : 10000,
-        } 
+        }
 
         self._best_ckpt = {
             'all_objF1' : None,
@@ -106,6 +106,39 @@ class EvalHook(_EvalHook):
             #print(self._best_score)
 
 
+    def evaluate(self, runner, results):
+        """Evaluate the results.
+
+        Args:
+            runner (:obj:`mmcv.Runner`): The underlined training runner.
+            results (list): Output results.
+        """
+        eval_res = self.dataloader.dataset.evaluate(
+            results, logger=runner.logger, **self.eval_kwargs)
+
+        for name, val in eval_res.items():
+            runner.log_buffer.output[name] = val
+        runner.log_buffer.ready = True
+
+        if self.save_best is not None:
+            # If the performance of model is pool, the `eval_res` may be an
+            # empty dict and it will raise exception when `self.save_best` is
+            # not None. More details at
+            # https://github.com/open-mmlab/mmdetection/issues/6265.
+            if not eval_res:
+                warnings.warn(
+                    'Since `eval_res` is an empty dict, the behavior to save '
+                    'the best checkpoint will be skipped in this evaluation.')
+                return None
+
+            if self.key_indicator == 'auto':
+                # infer from eval_results
+                self._init_rule(self.rule, list(eval_res.keys())[0])
+            # return eval_res[self.key_indicator]
+
+        return None
+
+
     def _compare_multiple_metric(self, runner):
         indicator = ''
         score = 0
@@ -113,7 +146,7 @@ class EvalHook(_EvalHook):
         for name, best_val in self._best_score.items():
             eval_val = runner.log_buffer.output[name]
 
-            # eval_val = runner.outputs[name] 
+            # eval_val = runner.outputs[name]
             # print(name)
             if 'Hausdorff' in name:
                 if eval_val < best_val:
@@ -134,7 +167,7 @@ class EvalHook(_EvalHook):
                     score = eval_val
                     self._best_score[name] = eval_val
                     # print(indicator, name)
-        
+
         return indicator, score
 
 
@@ -168,7 +201,6 @@ class EvalHook(_EvalHook):
                         self._best_ckpt[best_indicator]):
 
                     #if best_indicator in self.best_ckpt_path:
-                    
                     # self.file_client.remove(self.best_ckpt_path)
                     self.file_client.remove(self._best_ckpt[best_indicator])
                     runner.logger.info(
@@ -181,8 +213,8 @@ class EvalHook(_EvalHook):
             #for name, best_val in self._best_score.items():
             #            #print(name, val)
             #            # print(runner.log_buffer.output)
-            #            # eval_val = runner.log_buffer.output[name] 
-            #            eval_val = runner.outputs[name] 
+            #            # eval_val = runner.log_buffer.output[name]
+            #            eval_val = runner.outputs[name]
             #            if 'Hausdorff' in name:
             #                if eval_val < best_val:
             #                    # runner.meta['hook_msgs']['_best_score'][name] = eval_val
