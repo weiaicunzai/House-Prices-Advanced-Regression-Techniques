@@ -274,7 +274,6 @@ def train(net, train_dataloader, val_dataloader, writer, args):
             #))
 
 
-
         train_t = time.time()
 
 

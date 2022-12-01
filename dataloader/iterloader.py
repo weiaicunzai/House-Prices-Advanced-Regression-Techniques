@@ -1,10 +1,11 @@
-# import time
+import time
 
 class IterLoader:
 
     def __init__(self, dataloader):
         self._dataloader = dataloader
         self.iter_loader = iter(self._dataloader)
+
 
     def __next__(self):
         try:
