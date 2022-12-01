@@ -26,6 +26,7 @@ from metric import eval_metrics, gland_accuracy_object_level
 from loss import SegmentLevelLoss
 from dataloader import IterLoader
 import test_aug
+from losses import DiceLoss
 
 
 
@@ -39,7 +40,8 @@ def train(net, train_dataloader, val_dataloader, writer, args):
 
     # train_scheduler = PolyLR(optimizer, max_iter=max_iter, power=0.9)
     train_scheduler = PolyLR(optimizer, max_iter=total_iter, power=0.9)
-    loss_fn = nn.CrossEntropyLoss(ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
+    loss_fn_ce = nn.CrossEntropyLoss(ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
+    loss_fn_dice = DiceLoss(ignore_index=train_dataloader.dataset.ignore_index)
     loss_l2 = nn.MSELoss()
     loss_seg = SegmentLevelLoss(op=args.op)
 
@@ -111,9 +113,10 @@ def train(net, train_dataloader, val_dataloader, writer, args):
             with autocast():
                 preds = net(images)
                 # print(preds.dtype)
-                loss = loss_fn(preds, masks)
-                loss = loss.mean()
-                # print(loss.dtype)
+                loss_ce = loss_fn_ce(preds, masks)
+                loss_ce = loss_ce.mean()
+                loss_dice = loss_fn_dice(preds, masks)
+                loss = 3 * loss_dice + loss_ce
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
@@ -121,8 +124,11 @@ def train(net, train_dataloader, val_dataloader, writer, args):
 
         else:
             preds = net(images)
-            loss = loss_fn(preds, masks)
-            loss = loss.mean()
+            loss_ce = loss_fn_ce(preds, masks)
+            loss_ce = loss_ce.mean()
+            loss_dice = loss_fn_dice(preds, masks)
+            loss = 3 * loss_dice + 1 * loss_ce
+            scaler.scale(loss).backward()
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -340,16 +346,16 @@ def evaluate(net, val_dataloader, writer, args):
                     num_classes=2
                 )
                 # print(pred.shape, gt_seg_map.shape)
-                t2 = time.time()
-                print(test_aug.aug_test,  t2 - t1)
+                # t2 = time.time()
+                # print(test_aug.aug_test,  t2 - t1)
 
                 # print(pred.shape, gt_seg_map.shape)
-                t3 = time.time()
+                # t3 = time.time()
                 _, _, F1, dice, _, haus = gland_accuracy_object_level(pred, gt_seg_map)
                 # print(F1, dice, haus)
-                t4 = time.time()
-                print(gland_accuracy_object_level, t4 - t3)
-                print()
+                # t4 = time.time()
+                # print(gland_accuracy_object_level, t4 - t3)
+                # print()
 
                 res = np.array([F1, dice, haus])
 
