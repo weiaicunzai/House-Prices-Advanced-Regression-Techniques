@@ -38,3 +38,13 @@ models/swin_test.py
 run1.sh
 **/**/.*jpg
 legacy/old/overlay
+mmsegmentation
+QT500
+baseline_test
+bs64_20kiter
+mmtransform.py
+models/mmUnet.py
+res1
+test_time_per_img
+x.py
+save_tmp
