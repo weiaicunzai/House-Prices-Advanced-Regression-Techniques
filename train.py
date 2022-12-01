@@ -45,7 +45,7 @@ def train(net, train_dataloader, val_dataloader, writer, args):
 
 
     #batch_start = time.time()
-    train_start = time.time()
+    # train_start = time.time()
     total_load_time = 0
     train_iterloader = IterLoader(train_dataloader)
     #for batch_idx, (images, masks) in enumerate(train_loader):
@@ -79,15 +79,16 @@ def train(net, train_dataloader, val_dataloader, writer, args):
     #    with_stack=True
     #) as p:
     #images, masks = next(train_iterloader)
-
-    start_t = time.time()
+    train_t = time.time()
     for iter_idx, (images, masks) in enumerate(train_iterloader):
         # images, masks = images, masks
 
     # for iter_idx in range(1000000):
+        # iter_start = time.time()
 
+        data_time = time.time() - train_t
 
-        data_time = time.time() - start_t
+        # eval_start = time.time()
             # total = time.time() - batch_start
             # print(epoch, time.time() - batch_start)
             # print(total / (batch_idx + 1))
@@ -142,12 +143,12 @@ def train(net, train_dataloader, val_dataloader, writer, args):
         if args.poly:
             train_scheduler.step()
 
+        iter_time = time.time() - train_t
 
         # print((iter_idx + 1) % 50)
         if (iter_idx + 1) % 50 == 0:
-            # print((iter_idx + 1) % 50)
             print(('Training Iter: [{iter}/{total_iter}] '
-                    'Lr:{lr:0.8f} Loss:{loss:0.4f} Iter time:{iter_time:0.4f} Data loading time:{data_time:0.4f}s').format(
+                    'Lr:{lr:0.8f} Loss:{loss:0.4f}, Iter time:{iter_time:0.4f}s Data loading time:{data_time:0.4f}s').format(
                 loss=loss.item(),
                 # epoch=epoch,
                 iter=(iter_idx+1),
@@ -159,12 +160,12 @@ def train(net, train_dataloader, val_dataloader, writer, args):
                 lr=optimizer.param_groups[0]['lr'],
                 #beta=optimizer.param_groups[0]['betas'][0],
                 #time=batch_finish - train_start
-                # time=time.time() - eval_start
-                iter_time = time.time() - start_t,
-                data_time = data_time
+                # time=time.time()- eval_start
+                iter_time=iter_time,
+                data_time=data_time,
             ))
 
-        # continue
+
         # print log
         #if args.eval_iter % (iter_idx + 1) == 0:
         # print(args.eval_iter)
@@ -266,7 +267,9 @@ def train(net, train_dataloader, val_dataloader, writer, args):
             #    total_load_time / total_training * 100
             #))
 
-        start_t = time.time()
+
+        train_t = time.time()
+
 
 def evaluate(net, val_dataloader, writer, args):
     net.eval()
