@@ -556,7 +556,6 @@ def data_loader(args, image_set):
     else:
         data_loader = torch.utils.data.DataLoader(
                 dataset, batch_size=args.b, num_workers=4, shuffle=True, pin_memory=True, persistent_workers=True,
-
                 prefetch_factor=4
                 )
 
