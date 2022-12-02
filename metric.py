@@ -197,6 +197,8 @@ import skimage.morphology as morph
 #
 #    return gt_colors
 
+
+
 def gland_accuracy_object_level(pred, gt):
     """ Compute the object-level hausdorff distance between predicted  and
     groundtruth """
@@ -221,7 +223,7 @@ def gland_accuracy_object_level(pred, gt):
 
     Ns = len(np.unique(pred_labeled)) - 1
     gt_labeled = morph.label(gt, connectivity=2)
-    gt_labeled = morph.remove_small_objects(gt_labeled, 3)   # remove 1 or 2 pixel noise in the image
+    gt_labeled = morph.remove_small_objects(gt_labeled)   # remove 1 or 2 pixel noise in the image
     gt_labeled = morph.label(gt_labeled, connectivity=2)
     Ng = len(np.unique(gt_labeled)) - 1
     #print('ffffff', pred_labeled.shape, gt_labeled.shape)
@@ -379,7 +381,6 @@ def gland_accuracy_object_level(pred, gt):
         hausdorff_s += sigma_j * haus_j
 
     return recall, precision, F1, (dice_g + dice_s) / 2, (iou_g + iou_s) / 2, (hausdorff_g + hausdorff_s) / 2
-
 
 #results = np.random.randint(0, 5, size=(2, 3, 3))
 #preds = np.random.randint(0, 5, size=(2, 3, 3))
