@@ -353,6 +353,14 @@ def evaluate(net, val_dataloader, writer, args):
 
                 # print(pred.shape, gt_seg_map.shape)
                 # t3 = time.time()
+                xx = img_meta['img_name']
+                # xx = os.path.basename(xx)
+                print(xx)
+                bsname = xx.split('.')[0]
+                pp = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/tmp_Self'
+                torch.save(pred, os.path.join(pp, bsname + '_pred.pt'))
+                torch.save(gt_seg_map, os.path.join(pp, bsname + '_gt.pt'))
+
                 _, _, F1, dice, _, haus = gland_accuracy_object_level(pred, gt_seg_map)
                 # print(F1, dice, haus)
                 # t4 = time.time()
@@ -378,6 +386,8 @@ def evaluate(net, val_dataloader, writer, args):
     testA = testA / count_A
     testB = testB / count_B
 
+    print(total, testA, testB)
+    import sys; sys.exit()
 
 
     return total, testA, testB
