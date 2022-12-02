@@ -276,6 +276,9 @@ def train(net, train_dataloader, val_dataloader, writer, args):
 
         train_t = time.time()
 
+        if total_iter <= iter_idx:
+            break
+
 
 def evaluate(net, val_dataloader, writer, args):
     net.eval()
