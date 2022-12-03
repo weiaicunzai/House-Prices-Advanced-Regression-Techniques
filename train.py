@@ -13,6 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from torch.cuda.amp import GradScaler
 from torch.cuda.amp import autocast
+# from torch.optim.lr_scheduler import PolynomialLR
 #print(torch.cuda.amp.__file__)
 
 import transforms
@@ -21,7 +22,7 @@ from conf import settings
 from dataset.camvid import CamVid
 from dataset.voc2012 import VOC2012Aug
 #from dataset.camvid_lmdb import CamVid
-from lr_scheduler import PolyLR
+from lr_scheduler import PolynomialLR
 from metric import eval_metrics, gland_accuracy_object_level
 from loss import SegmentLevelLoss
 from dataloader import IterLoader
@@ -32,14 +33,13 @@ from losses import DiceLoss
 
 def train(net, train_dataloader, val_dataloader, writer, args):
 
-    optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.SGD(net.parameters(), lr=args.lr * args.scale, momentum=0.9, weight_decay=5e-4)
     # iter_per_epoch = len(train_dataset) / args.b
 
     # max_iter = args.e * len(train_loader)
     total_iter = args.iter
 
-    # train_scheduler = PolyLR(optimizer, max_iter=max_iter, power=0.9)
-    train_scheduler = PolyLR(optimizer, max_iter=total_iter, power=0.9)
+    train_scheduler = PolynomialLR(optimizer, total_iters=total_iter, power=0.9, min_lr=args.min_lr * args.scale)
     loss_fn_ce = nn.CrossEntropyLoss(ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
     loss_fn_dice = DiceLoss(ignore_index=train_dataloader.dataset.ignore_index)
     loss_l2 = nn.MSELoss()
@@ -353,6 +353,14 @@ def evaluate(net, val_dataloader, writer, args):
 
                 # print(pred.shape, gt_seg_map.shape)
                 # t3 = time.time()
+
+                xx = img_meta['img_name']
+                bsname = xx.split('.')[0]
+                torch.save(pred, os.path.join('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/tmp_res', bsname + '_pred.pt'))
+                torch.save(gt_seg_map, os.path.join('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/tmp_res', bsname + '_gt.pt'))
+
+
+
                 _, _, F1, dice, _, haus = gland_accuracy_object_level(pred, gt_seg_map)
                 # print(F1, dice, haus)
                 # t4 = time.time()
@@ -373,6 +381,7 @@ def evaluate(net, val_dataloader, writer, args):
                     count_B += 1
                     testB += res
 
+        import sys; sys.exit()
     total = (testA + testB) / (count_A + count_B)
 
     testA = testA / count_A
@@ -499,8 +508,10 @@ if __name__ == '__main__':
     parser.add_argument('-baseline', action='store_true', default=False, help='base line')
     parser.add_argument('-pretrain', action='store_true', default=False, help='pretrain data')
     parser.add_argument('-poly', action='store_true', default=False, help='poly decay')
+    parser.add_argument('-min_lr', type=float, default=1e-4, help='min_lr for poly')
     parser.add_argument('-branch', type=str, default='hybird', help='dataset name')
     parser.add_argument('-fp16', action='store_true', default=False, help='whether to use mixed precision training')
+    parser.add_argument('-scale', type=float, default=1, help='min_lr for poly')
     args = parser.parse_args()
 
     root_path = os.path.dirname(os.path.abspath(__file__))
