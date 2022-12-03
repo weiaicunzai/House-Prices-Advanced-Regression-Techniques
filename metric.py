@@ -219,11 +219,11 @@ def gland_accuracy_object_level(pred, gt):
     # get connected components
     pred_labeled = morph.label(pred, connectivity=2)
     pred_labeled = morph.remove_small_objects(pred_labeled)   # remove 1 or 2 pixel noise in the image
-    pred_labeled = morph.label(pred_labeled, connectivity=2, 100)
+    pred_labeled = morph.label(pred_labeled, connectivity=2)
 
     Ns = len(np.unique(pred_labeled)) - 1
     gt_labeled = morph.label(gt, connectivity=2)
-    gt_labeled = morph.remove_small_objects(gt_labeled, 100)   # remove 1 or 2 pixel noise in the image
+    gt_labeled = morph.remove_small_objects(gt_labeled)   # remove 1 or 2 pixel noise in the image
     gt_labeled = morph.label(gt_labeled, connectivity=2)
     Ng = len(np.unique(gt_labeled)) - 1
     #print('ffffff', pred_labeled.shape, gt_labeled.shape)
