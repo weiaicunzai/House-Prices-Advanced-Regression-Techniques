@@ -12,7 +12,6 @@ import skimage.morphology as morph
 
 
 import transforms
-# import mmtransform
 from dataset import CamVid, VOC2012Aug, Glas, PreTraining
 from conf import settings
 from metric import eval_metrics, gland_accuracy_object_level
@@ -42,7 +41,11 @@ def _get_lastlayer_params(net):
 
     return last_layer_weights, last_layer_bias
 
-def visulaize_lastlayer(writer, net, n_iter):
+def visualize_metric(writer, metrics, values, n_iter):
+    for m, v in zip(metrics, values):
+        writer.add_scalar('{}'.format(m), v, n_iter)
+
+def visualize_lastlayer(writer, net, n_iter):
     weights, bias = _get_lastlayer_params(net)
     writer.add_scalar('LastLayerGradients/grad_norm2_weights', weights.grad.norm(), n_iter)
     writer.add_scalar('LastLayerGradients/grad_norm2_bias', bias.grad.norm(), n_iter)
@@ -556,7 +559,6 @@ def data_loader(args, image_set):
     else:
         data_loader = torch.utils.data.DataLoader(
                 dataset, batch_size=args.b, num_workers=4, shuffle=True, pin_memory=True, persistent_workers=True,
-
                 prefetch_factor=4
                 )
 
@@ -822,6 +824,103 @@ def test(net, test_dataloader, crop_size, scales, base_size, classes, mean, std,
     #print('%, '.join([':'.join([str(n), str(round(a, 2))]) for n, a in zip(cls_names, acc)]))
     #print('All acc {:.2f}%'.format(all_acc))
 
+
+
+class CheckPointManager:
+    def __init__(self, save_path, max_keep_ckpts=5):
+
+        self.lg = [
+            'testA_F1',
+            'testA_Dice',
+            'testB_F1',
+            'testB_Dice',
+            'total_F1',
+            'total_Dice',
+        ]
+
+        self.le = [
+            'testA_Haus',
+            'testB_Haus',
+            'total_Haus',
+        ]
+
+        self.save_path = save_path
+        self.max_keep_ckpts = max_keep_ckpts
+        self.ckpt_keep_queue = []
+
+        self.best_value = {}
+        self.best_path = {}
+
+
+    def assert_metric(self, metrics):
+        for m in metrics:
+            if m not in self.lg and m not in self.le:
+                raise ValueError('{} should be in {} or {}'.format(
+                    m,
+                    self.lg,
+                    self.le
+                ))
+
+
+    def save_ckp_iter(self, model, iter_idx):
+        ckpt_save_path = os.path.join(
+            self.save_path,
+            'iter_{}.pt'.format(iter_idx)
+            )
+
+        print('saving checkpoint file to {}'.format(ckpt_save_path))
+        torch.save(model.state_dict(), ckpt_save_path)
+
+        self.ckpt_keep_queue.append(ckpt_save_path)
+
+        if len(self.ckpt_keep_queue) > self.max_keep_ckpts:
+            del_path = self.ckpt_keep_queue.pop()
+            print('deleting checkpoint file {}'.format(del_path))
+            os.remove(del_path)
+
+
+    def if_update(self, m, v):
+        if m in self.lg:
+            # the more the better
+            if self.best_value[m] < v:
+                return True
+
+        if m in self.le:
+            # the less the better
+            if self.best_value[m] > v:
+                return True
+
+        return False
+
+
+    def save_best(self, model, metrics, values, iter_idx):
+        """only keep one ckt for each metric"""
+        self.assert_metric(metrics)
+
+        for m, v in zip(metrics, values):
+
+            if m not in self.best_value:
+                self.best_value[m] = v
+
+
+            if self.if_update(m, v):
+
+                # saving best ckpt
+                ckpt_path = os.path.join(self.save_best,
+                            'best_{}_{}_iter_{}.pt'.format(m, v, iter_idx)
+                    )
+                print('saving checkpoint file to {}'.format(ckpt_path))
+
+                # del former best ckpt
+                # if former best chpt exists
+                if m in self.best_path:
+                    print('deleting checkpoint file {}'.format(self.best_path[m]))
+                    os.remove(self.best_path[m])
+
+
+                # update values
+                self.best_value[m] = v
+                self.best_path[m] = ckpt_path
 
 
 
