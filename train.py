@@ -96,7 +96,7 @@ def train(net, train_dataloader, val_dataloader, writer, args):
             # print(total / (batch_idx + 1))
             # continue
 
-        #for batch_idx, images in enumerate(train_loader):
+        # for batch_idx, images in enumerate(train_loader):
 
         # images =
 
@@ -285,9 +285,12 @@ def evaluate(net, val_dataloader, writer, args):
         # test_loss = 0.0
 
     # F1, Dice, Haus
-    testA = np.array([0, 0, 9999.0])
-    testB = np.array([0, 0, 9999.0])
-    total = np.array([0, 0, 9999.0])
+    #testA = np.array([0, 0, 0])
+    #testB = np.array([0, 0, 0])
+    #total = np.array([0, 0, 0])
+    testA = 0
+    testB = 0
+    total = 0
     # best =  np.array([0, 0, 9999])
 
     count_A = 0
@@ -319,10 +322,16 @@ def evaluate(net, val_dataloader, writer, args):
     # all_acc = 0
     # acc = 0
 
+    #from x import get_pred_and_gt
+    #pp = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/tmp_Self'
+    #pp = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/mmsegmentation/tmp_mmseg'
+    #get_pred_and_gt_loader = get_pred_and_gt(pp)
+
     valid_dataset = val_dataloader.dataset
     cls_names = valid_dataset.class_names
     ig_idx = valid_dataset.ignore_index
     # for images, masks in val_dataloader:
+    count = 0
     with torch.no_grad():
         for img_metas in tqdm(val_dataloader):
         #for images in validation_loader:
@@ -336,7 +345,7 @@ def evaluate(net, val_dataloader, writer, args):
                 # print(gt_seg_map.shape)
                 ori_shape = gt_seg_map.shape[:2]
 
-                t1 = time.time()
+                # t1 = time.time()
                 pred = test_aug.aug_test(
                     imgs=imgs,
                     flip_direction=img_meta['flip'],
@@ -347,21 +356,29 @@ def evaluate(net, val_dataloader, writer, args):
                     mode='slide',
                     num_classes=2
                 )
+
                 # print(pred.shape, gt_seg_map.shape)
                 # t2 = time.time()
                 # print(test_aug.aug_test,  t2 - t1)
 
                 # print(pred.shape, gt_seg_map.shape)
                 # t3 = time.time()
-                xx = img_meta['img_name']
+                #xx = img_meta['img_name']
                 # xx = os.path.basename(xx)
-                print(xx)
-                bsname = xx.split('.')[0]
-                pp = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/tmp_Self'
-                torch.save(pred, os.path.join(pp, bsname + '_pred.pt'))
-                torch.save(gt_seg_map, os.path.join(pp, bsname + '_gt.pt'))
+                #print(xx)
+                #bsname = xx.split('.')[0]
+                #pp = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/tmp_Self'
+                #torch.save(pred, os.path.join(pp, bsname + '_pred.pt'))
+                #torch.save(gt_seg_map, os.path.join(pp, bsname + '_gt.pt'))
+                img_name = img_meta['img_name']
+                #pred, gt_seg_map, img_name = next(get_pred_and_gt_loader)
+                #count += 1
+                # pred = pred.numpy()
+                # gt_seg_map = gt_seg_map.numpy()
+                # print(count, img_name, type(pred), type(gt_seg_map))
 
                 _, _, F1, dice, _, haus = gland_accuracy_object_level(pred, gt_seg_map)
+                # print(haus, img_name)
                 # print(F1, dice, haus)
                 # t4 = time.time()
                 # print(gland_accuracy_object_level, t4 - t3)
@@ -369,7 +386,6 @@ def evaluate(net, val_dataloader, writer, args):
 
                 res = np.array([F1, dice, haus])
 
-                img_name = img_meta['img_name']
                 # print(img_name)
 
                 if 'testA' in img_name:
@@ -386,9 +402,10 @@ def evaluate(net, val_dataloader, writer, args):
     testA = testA / count_A
     testB = testB / count_B
 
-    print(total, testA, testB)
-    import sys; sys.exit()
+    # print(total, testA, testB)
+    # import sys; sys.exit()
 
+    print(total, testA, testB)
 
     return total, testA, testB
 
@@ -593,8 +610,8 @@ if __name__ == '__main__':
     tensor = torch.Tensor(1, 3, settings.IMAGE_SIZE, settings.IMAGE_SIZE)
     utils.visualize_network(writer, net, tensor)
 
-    train(net, train_loader, val_loader, writer, args)
-    #evaluate(net, val_loader, writer, args)
+    #train(net, train_loader, val_loader, writer, args)
+    evaluate(net, val_loader, writer, args)
 
     #optimizer = optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.wd)
     #optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
