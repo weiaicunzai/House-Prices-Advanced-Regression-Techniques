@@ -3,6 +3,8 @@ import os
 import glob
 import re
 import random
+import numbers
+import queue
 
 import numpy as np
 import torch
@@ -846,7 +848,7 @@ class CheckPointManager:
 
         self.save_path = save_path
         self.max_keep_ckpts = max_keep_ckpts
-        self.ckpt_keep_queue = []
+        self.ckpt_keep_queue = queue.Queue()
 
         self.best_value = {}
         self.best_path = {}
@@ -861,6 +863,10 @@ class CheckPointManager:
                     self.le
                 ))
 
+    def assert_values(self, values):
+        for v in values:
+            assert isinstance(v, numbers.Number)
+
 
     def save_ckp_iter(self, model, iter_idx):
         ckpt_save_path = os.path.join(
@@ -871,15 +877,18 @@ class CheckPointManager:
         print('saving checkpoint file to {}'.format(ckpt_save_path))
         torch.save(model.state_dict(), ckpt_save_path)
 
-        self.ckpt_keep_queue.append(ckpt_save_path)
+        self.ckpt_keep_queue.put(ckpt_save_path)
 
-        if len(self.ckpt_keep_queue) > self.max_keep_ckpts:
-            del_path = self.ckpt_keep_queue.pop()
+        if self.ckpt_keep_queue.qsize() > self.max_keep_ckpts:
+            del_path = self.ckpt_keep_queue.get()
             print('deleting checkpoint file {}'.format(del_path))
             os.remove(del_path)
 
 
     def if_update(self, m, v):
+        if not isinstance(v, numbers.Number):
+            raise ValueError('{} should be a number'.format(v))
+
         if m in self.lg:
             # the more the better
             if self.best_value[m] < v:
@@ -896,6 +905,7 @@ class CheckPointManager:
     def save_best(self, model, metrics, values, iter_idx):
         """only keep one ckt for each metric"""
         self.assert_metric(metrics)
+        self.assert_values(values)
 
         for m, v in zip(metrics, values):
 
@@ -906,15 +916,17 @@ class CheckPointManager:
             if self.if_update(m, v):
 
                 # saving best ckpt
-                ckpt_path = os.path.join(self.save_best,
+                ckpt_path = os.path.join(self.save_path,
                             'best_{}_{}_iter_{}.pt'.format(m, v, iter_idx)
                     )
-                print('saving checkpoint file to {}'.format(ckpt_path))
+                print('saving best checkpoint file to {}'.format(ckpt_path))
+                torch.save(model.state_dict(), ckpt_path)
+
 
                 # del former best ckpt
                 # if former best chpt exists
                 if m in self.best_path:
-                    print('deleting checkpoint file {}'.format(self.best_path[m]))
+                    print('deleting best checkpoint file {}'.format(self.best_path[m]))
                     os.remove(self.best_path[m])
 
 
