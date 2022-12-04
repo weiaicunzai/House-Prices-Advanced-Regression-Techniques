@@ -329,7 +329,6 @@ def gland_accuracy_object_level(pred, gt):
         iou_g += gamma_i * iou_i
         hausdorff_g += gamma_i * haus_i
 
-        print('hausdorff_g', gamma_i * haus_i, gamma_i, haus_i)
 
     # compute how well segmented object overlaps its groundtruth object
     dice_s = 0.0

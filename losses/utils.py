@@ -114,3 +114,20 @@ def weighted_loss(loss_func):
         return loss
 
     return wrapper
+
+
+class WeightedLossWarpper:
+    def __init__(self, loss_fn, sampler=None):
+        self.loss_fn = loss_fn
+        self.sampler = sampler
+
+    def __call__(self, preds, masks):
+        if self.sampler is not None:
+            seg_weight = self.sampler.sample(preds, masks.unsqueeze(1))
+
+        loss = self.loss_fn(preds, masks)
+
+        if self.sampler is not None:
+            loss = loss * seg_weight
+
+        return loss.mean()

@@ -27,7 +27,8 @@ from metric import eval_metrics, gland_accuracy_object_level
 from loss import SegmentLevelLoss
 from dataloader import IterLoader
 import test_aug
-from losses import DiceLoss
+from losses import DiceLoss, WeightedLossWarpper
+import sampler as _sampler
 
 
 
@@ -56,9 +57,12 @@ def train(net, train_dataloader, val_loader, writer, args):
 
     train_scheduler = PolynomialLR(optimizer, total_iters=total_iter, power=0.9, min_lr=args.min_lr * args.scale)
     loss_fn_ce = nn.CrossEntropyLoss(ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
-    loss_fn_dice = DiceLoss(ignore_index=train_dataloader.dataset.ignore_index)
+    loss_fn_dice = DiceLoss(ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
     loss_l2 = nn.MSELoss()
     loss_seg = SegmentLevelLoss(op=args.op)
+    sampler = _sampler.OHEMPixelSampler(ignore_index=train_dataloader.dataset.ignore_index)
+    loss_fn_ce = WeightedLossWarpper(loss_fn_ce, sampler)
+    loss_fn_dice = WeightedLossWarpper(loss_fn_dice, sampler)
 
 
     #batch_start = time.time()
@@ -133,9 +137,14 @@ def train(net, train_dataloader, val_loader, writer, args):
             with autocast():
                 preds = net(images)
                 # print(preds.dtype)
+                # print(preds.shape, masks.shape)
+                #seg_weight = sampler.sample(preds, masks.unsqueeze(1))
                 loss_ce = loss_fn_ce(preds, masks)
-                loss_ce = loss_ce.mean()
+                #loss_ce = loss_ce * seg_weight
+                #loss_ce = loss_ce.mean()
                 loss_dice = loss_fn_dice(preds, masks)
+                #loss_dice = loss_dice * seg_weight
+                #loss_dice = loss_dice.mean()
                 loss = 3 * loss_dice + loss_ce
             scaler.scale(loss).backward()
             scaler.step(optimizer)

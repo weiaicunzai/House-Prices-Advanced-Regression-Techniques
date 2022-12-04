@@ -933,35 +933,3 @@ class CheckPointManager:
                 # update values
                 self.best_value[m] = v
                 self.best_path[m] = ckpt_path
-
-
-
-
-
-#from models.deeplabv3plus import deeplabv3plus
-#
-#net = deeplabv3plus(11)
-#dataset = CamVid(
-#    'data',
-#    image_set='val',
-#    download=True
-#)
-#trans = transforms.Compose([
-#    #transforms.RandomScaleCrop(settings.IMAGE_SIZE),
-#    transforms.ToTensor(),
-#    transforms.Normalize(settings.MEAN, settings.STD),
-#])
-#dataset.transforms = trans
-#
-#test_loader = torch.utils.data.DataLoader(
-#            dataset, batch_size=1, num_workers=4, shuffle=True, pin_memory=True)
-#
-#base_size = 512
-#MEAN = (0.42019099703461577, 0.41323568513979647, 0.4010048431259079)
-#STD = (0.30598050258519743, 0.3089986932156864, 0.3054061869915674)
-#scales = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75]
-#
-#test(net, test_loader, 431, scales, 512, 11, MEAN, STD)
-#
-#
-#
