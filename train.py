@@ -22,7 +22,7 @@ from conf import settings
 from dataset.camvid import CamVid
 from dataset.voc2012 import VOC2012Aug
 #from dataset.camvid_lmdb import CamVid
-from lr_scheduler import PolynomialLR
+from lr_scheduler import PolynomialLR, WarmUpLR, WarmUpWrapper
 from metric import eval_metrics, gland_accuracy_object_level
 from loss import SegmentLevelLoss
 from dataloader import IterLoader
@@ -54,8 +54,13 @@ def train(net, train_dataloader, val_loader, writer, args):
 
     # max_iter = args.e * len(train_loader)
     total_iter = args.iter
+    warmup_iter = int(args.iter * 0.1)
 
-    train_scheduler = PolynomialLR(optimizer, total_iters=total_iter, power=0.9, min_lr=args.min_lr * args.scale)
+    train_scheduler = PolynomialLR(optimizer, total_iters=total_iter - warmup_iter, power=0.9, min_lr=args.min_lr * args.scale)
+    warmup_scheduler = WarmUpLR(optimizer, total_iters=warmup_iter)
+    lr_schduler = WarmUpWrapper(warmuplr_scheduler=warmup_scheduler, lr_scheduler=train_scheduler)
+
+
     loss_fn_ce = nn.CrossEntropyLoss(ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
     loss_fn_dice = DiceLoss(ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
     loss_l2 = nn.MSELoss()
@@ -162,7 +167,10 @@ def train(net, train_dataloader, val_loader, writer, args):
             optimizer.step()
             optimizer.zero_grad()
 
+        #if args.poly:
+            #train_scheduler.step()
         #p.step()
+        lr_schduler.step(iter_idx)
 
         #if iter_idx > 1000:
             #break
@@ -175,8 +183,6 @@ def train(net, train_dataloader, val_loader, writer, args):
         #if not args.baseline:
         #    seg_loss = loss_seg(preds, masks)
         #    loss[seg_loss == 1] *= args.alpha
-        if args.poly:
-            train_scheduler.step()
 
         iter_time = time.time() - train_t
 
@@ -325,6 +331,7 @@ def train(net, train_dataloader, val_loader, writer, args):
 
             print('best value:', ckpt_manager.best_value)
             net.train()
+
 
         train_t = time.time()
 
@@ -545,6 +552,7 @@ if __name__ == '__main__':
     checkpoint_path = os.path.join(
         root_path, settings.CHECKPOINT_FOLDER, args.prefix + '_' + settings.TIME_NOW)
     log_dir = os.path.join(root_path, settings.LOG_FOLDER, args.prefix + '_' +settings.TIME_NOW)
+    print('saving tensorboard log into {}'.format(log_dir))
 
     if not os.path.exists(checkpoint_path):
         os.makedirs(checkpoint_path)

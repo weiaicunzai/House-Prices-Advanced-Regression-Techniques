@@ -380,7 +380,6 @@ def gland_accuracy_object_level(pred, gt):
         dice_s += sigma_j * dice_j
         iou_s += sigma_j * iou_j
         hausdorff_s += sigma_j * haus_j
-        print('hausdorff_s', sigma_j * haus_j, sigma_j, haus_j)
 
     return recall, precision, F1, (dice_g + dice_s) / 2, (iou_g + iou_s) / 2, (hausdorff_g + hausdorff_s) / 2
 
