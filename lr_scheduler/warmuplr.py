@@ -21,7 +21,6 @@ class WarmUpWrapper:
         self.warmup = warmuplr_scheduler
         self.warmup_iter = self.warmup.total_iters
         self.lr_scheduler = lr_scheduler
-        print(self.warmup_iter)
 
     def step(self, iter_idx):
         """ iter_idx: training iter_idx """

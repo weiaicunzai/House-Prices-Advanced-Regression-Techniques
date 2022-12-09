@@ -1544,9 +1544,223 @@ class CenterCrop(object):
         return self.__class__.__name__ + '(size={0})'.format(self.size)
 
 
+def elastic_transform(
+    #img: np.ndarray,
+    #alpha: float,
+    #sigma: float,
+    #alpha_affine: float,
+    #interpolation: int = cv2.INTER_LINEAR,
+    #border_mode: int = cv2.BORDER_REFLECT_101,
+    img,
+    alpha,
+    sigma,
+    alpha_affine,
+    pts1,
+    pts2,
+    interpolation=cv2.INTER_LINEAR,
+    border_mode=cv2.BORDER_CONSTANT,
+    value=None,
+    # value: Optional[ImageColorType] = None,
+    # random_state: Optional[np.random.RandomState] = None,
+    # approximate: bool = False,
+    same_dxdy: bool = False,
+):
+    """Elastic deformation of images as described in [Simard2003]_ (with modifications).
+    Based on https://gist.github.com/ernestum/601cdf56d2b424757de5
+    .. [Simard2003] Simard, Steinkraus and Platt, "Best Practices for
+         Convolutional Neural Networks applied to Visual Document Analysis", in
+         Proc. of the International Conference on Document Analysis and
+         Recognition, 2003.
+    """
+    height, width = img.shape[:2]
+
+    # Random affine
+    # center_square = np.array((height, width), dtype=np.float32) // 2
+    # square_size = min((height, width)) // 3
+    alpha = float(alpha)
+    sigma = float(sigma)
+    # alpha_affine = float(alpha_affine)
+
+    # pts1 = np.array(
+    #     [
+    #         center_square + square_size,
+    #         [center_square[0] + square_size, center_square[1] - square_size],
+    #         center_square - square_size,
+    #     ],
+    #     dtype=np.float32,
+    # )
+
+    #
+
+    #pts2 = pts1 + random_utils.uniform(-alpha_affine, alpha_affine, size=pts1.shape, random_state=random_state).astype(
+    #    np.float32
+    #)
+    # np.random.uniform: Samples are uniformly distributed over the half-open interval [low, high)
+    # (includes low, but excludes high).In other words, any value within the given interval is equally
+    # likely to be drawn by uniform.
+    # pts2 = pts1 + np.random.uniform(-alpha_affine, alpha_affine, size=pts1.shape).astype(np.float32)
+
+    matrix = cv2.getAffineTransform(pts1, pts2)
+
+    #warp_fn = _maybe_process_in_chunks(
+    #    cv2.warpAffine, M=matrix, dsize=(width, height), flags=interpolation, borderMode=border_mode, borderValue=value
+    #)
+    img = cv2.warpAffine(img, M=matrix, dsize=(width, height), flags=interpolation, borderMode=border_mode, borderValue=value)
+    # img = warp_fn(img)
+
+    # if approximate:
+        # Approximate computation smooth displacement map with a large enough kernel.
+        # On large images (512+) this is approximately 2X times faster
+        #dx = random_utils.rand(height, width, random_state=random_state).astype(np.float32) * 2 - 1
+    dx =  np.random.rand(height, width).astype(np.float32) * 2 - 1
+    cv2.GaussianBlur(dx, (17, 17), sigma, dst=dx)
+    dx *= alpha
+    if same_dxdy:
+        # Speed up even more
+        dy = dx
+    else:
+        # dy = random_utils.rand(height, width, random_state=random_state).astype(np.float32) * 2 - 1
+        dy =  np.random.rand(height, width).astype(np.float32) * 2 - 1
+        cv2.GaussianBlur(dy, (17, 17), sigma, dst=dy)
+        #cv2.GaussianBlur(dy, (3, 3), sigma, dst=dy)
+        dy *= alpha
+    #else:
+    #    dx = np.float32(
+    #        gaussian_filter((random_utils.rand(height, width, random_state=random_state) * 2 - 1), sigma) * alpha
+    #    )
+    #    if same_dxdy:
+    #        # Speed up
+    #        dy = dx
+    #    else:
+    #        dy = np.float32(
+    #            gaussian_filter((random_utils.rand(height, width, random_state=random_state) * 2 - 1), sigma) * alpha
+    #        )
+    # print(dx.mean(), dy.mean(), dx.std(), dy.std())
+
+    x, y = np.meshgrid(np.arange(width), np.arange(height))
+
+    # print(dx, dy)
+    map_x = np.float32(x + dx)
+    map_y = np.float32(y + dy)
+    #map_x = np.float32(x)
+    #map_y = np.float32(y)
+
+    img = cv2.remap(img, map1=map_x, map2=map_y, interpolation=interpolation, borderMode=border_mode, borderValue=value)
+
+    if interpolation == cv2.INTER_NEAREST:
+        kernel = np.ones((5,5),np.uint8)
+        img = cv2.erode(img, kernel, iterations=3)
+        img = cv2.dilate(img, kernel, iterations=3)
+
+    return img
+
+
+class ElasticTransform:
+    def __init__(
+        self,
+        alpha=1,
+        sigma=50,
+        alpha_affine=50,
+        # border_mode=cv2.BORDER_REFLECT_101,
+        same_dxdy=False,
+        pad_value=0,
+        seg_pad_value=255,
+        p=0.5,
+    ):
+
+        self.alpha = alpha
+        self.p = p
+        self.sigma = sigma
+        self.alpha_affine = alpha_affine
+        self.seg_pad_value = seg_pad_value
+        self.pad_value = pad_value
+        self.same_dxdy = same_dxdy
+        # interpolation=cv2.INTER_LINEAR,
+
+    def __call__(self, img, seg_map):
+
+        if random.random() > self.p:
+            return img, seg_map
+
+        height, width = img.shape[:2]
+
+        # Random affine
+        center_square = np.array((height, width), dtype=np.float32) // 2
+        square_size = min((height, width)) // 3
+        pts1 = np.array(
+            [
+                center_square + square_size,
+                [center_square[0] + square_size, center_square[1] - square_size],
+                center_square - square_size,
+            ],
+            dtype=np.float32,
+        )
+        alpha_affine = float(self.alpha_affine)
+        pts2 = pts1 + np.random.uniform(-alpha_affine, alpha_affine, size=pts1.shape).astype(np.float32)
+
+        img = elastic_transform(
+            img=img,
+            alpha=self.alpha,
+            sigma=self.sigma,
+            alpha_affine=self.alpha_affine,
+            pts1=pts1,
+            pts2=pts2,
+            interpolation=cv2.INTER_LINEAR,
+            #interpolation=cv2.INTER_NEAREST,
+            value=self.pad_value,
+            same_dxdy=self.same_dxdy)
+
+        seg_map = elastic_transform(
+            img=seg_map,
+            alpha=self.alpha,
+            sigma=self.sigma,
+            alpha_affine=self.alpha_affine,
+            pts1=pts1,
+            pts2=pts2,
+            interpolation=cv2.INTER_NEAREST,
+            value=self.seg_pad_value,
+            same_dxdy=self.same_dxdy
+        )
+
+        return img, seg_map
+
+class RandomChoice():
+    """Apply single transformation randomly picked from a list. This transform does not support torchscript."""
+
+    def __init__(self, transforms, p=None):
+        self.transforms = transforms
+        self.p = p
+
+    def __call__(self, *args):
+        t = random.choice(self.transforms)
+        return t(*args)
+
+    #def __repr__(self) -> str:
+        #return f"{super().__repr__()}(p={self.p})"
 
 #img_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/img.jpg'
 #img_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)/testA_16.bmp'
+#segmap_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)/testA_16_anno.bmp'
+#img = cv2.imread(img_path)
+#seg_map = cv2.imread(segmap_path, -1)
+#seg_map[seg_map != 0] = 255
+#
+## print(img)
+#
+#cv2.imwrite('res1.jpg', seg_map)
+##cv2.imwrite('res1.jpg', img)
+#elastic_transforms = ElasticTransform(alpha=10, sigma=3, alpha_affine=90, p=1)
+#img1, seg_map = elastic_transforms(img, seg_map)
+##cv2.imwrite('res.jpg', img1)
+#cv2.imwrite('res.jpg', seg_map[0])
+#cv2.imwrite('seg_map.jpg', seg_map[1])
+#
+
+# print(np.unique(seg_map))
+
+# print((seg_map - img1).mean())
+
+
 ##
 #crop_size=(480, 480)
 #trans = Resize(range=[0.5, 1.5])  # 0.0004977783894538879

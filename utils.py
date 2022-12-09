@@ -483,6 +483,7 @@ def data_loader(args, image_set):
 
         crop_size=(480, 480)
         trans = transforms.Compose([
+            transforms.ElasticTransform(alpha=10, sigma=3, alpha_affine=90, p=0.5),
             transforms.Resize(range=[0.5, 1.5]),
             # transforms.RandomRotation(degrees=90, expand=False),
             transforms.RandomRotation(degrees=90, expand=True),
