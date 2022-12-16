@@ -234,8 +234,16 @@ def get_model(model_name, input_channels, class_num, args=None):
     elif model_name == 'mgl':
         from models.mgl.mglnet import mgl
         net = mgl(class_num)
+
+    elif model_name == 'dgcn':
+        from models.dual_gcn import DualSeg_res101
+        net = DualSeg_res101(class_num)
     else:
         raise ValueError('network type does not supported')
+
+    print()
+    print(net)
+    print()
 
     return net
 
