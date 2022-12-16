@@ -6,6 +6,9 @@ from collections.abc import Iterable
 import warnings
 import types
 import collections
+from typing import List, Optional, Tuple, Union, no_type_check
+from itertools import repeat
+
 
 import cv2
 # import mmcv
@@ -1070,7 +1073,7 @@ class Normalize:
         std = torch.tensor(self.std, dtype=torch.float32)
 
         if (std == 0).any():
-            raise ValueError('std evaluated to zero after conversion to {}, leading to division by zero.'.format(dtype))
+            raise ValueError('std evaluated to zero after conversion to {}, leading to division by zero.'.format(std.dtype))
         if mean.ndim == 1:
             mean = mean.view(-1, 1, 1)
         if std.ndim == 1:
@@ -1233,6 +1236,17 @@ class MultiScaleFlipAug(object):
         self.mean = torch.tensor(mean, dtype=torch.float32)
         self.std = torch.tensor(std, dtype=torch.float32)
         # print(self.flip_direction, 'cccccccccccccccccccccccccc')
+        self.resize_to_multiple = ResizeToMultiple(
+            interpolation=cv2.INTER_LINEAR,
+            size_divisor=32,
+        )
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += (f'(flip={self.flip}, '
+                     f'img_ratios={self.img_ratios}), '
+                     f'flip_direction={self.flip_direction})')
+        return repr_str
 
     def construct_flip_param(self):
 
@@ -1257,7 +1271,7 @@ class MultiScaleFlipAug(object):
         mean = self.mean
 
         if (std == 0).any():
-            raise ValueError('std evaluated to zero after conversion to {}, leading to division by zero.'.format(dtype))
+            raise ValueError('std evaluated to zero after conversion to {}, leading to division by zero.'.format(std.dtype))
         if mean.ndim == 1:
             mean = mean.view(-1, 1, 1)
         if std.ndim == 1:
@@ -1298,6 +1312,7 @@ class MultiScaleFlipAug(object):
         for ratio in self.img_ratios:
 
             resized_img = cv2.resize(img, (0, 0), fx=ratio, fy=ratio)
+            #resized_img = self.resize_to_multiple(resized_img)
 
             for flip, direction in flip_param:
 
@@ -1330,6 +1345,212 @@ class MultiScaleFlipAug(object):
         # import sys; sys.exit()
 
         return img_meta
+
+
+def _ntuple(n):
+
+    def parse(x):
+        if isinstance(x, collections.abc.Iterable):
+            return x
+        return tuple(repeat(x, n))
+
+    return parse
+
+to_2tuple = _ntuple(2)
+
+
+def _scale_size(
+    size: Tuple[int, int],
+    scale: Union[float, int, tuple],
+) -> Tuple[int, int]:
+    """Rescale a size by a ratio.
+    Args:
+        size (tuple[int]): (w, h).
+        scale (float | tuple(float)): Scaling factor.
+    Returns:
+        tuple[int]: scaled size.
+    """
+    if isinstance(scale, (float, int)):
+        scale = (scale, scale)
+    w, h = size
+    return int(w * float(scale[0]) + 0.5), int(h * float(scale[1]) + 0.5)
+
+def rescale_size(old_size: tuple,
+                 scale: Union[float, int, tuple],
+                 return_scale: bool = False) -> tuple:
+    """Calculate the new size to be rescaled to.
+    Args:
+        old_size (tuple[int]): The old size (w, h) of image.
+        scale (float | tuple[int]): The scaling factor or maximum size.
+            If it is a float number, then the image will be rescaled by this
+            factor, else if it is a tuple of 2 integers, then the image will
+            be rescaled as large as possible within the scale.
+        return_scale (bool): Whether to return the scaling factor besides the
+            rescaled image size.
+    Returns:
+        tuple[int]: The new rescaled image size.
+    """
+    w, h = old_size
+    if isinstance(scale, (float, int)):
+        if scale <= 0:
+            raise ValueError(f'Invalid scale {scale}, must be positive.')
+        scale_factor = scale
+    elif isinstance(scale, tuple):
+        max_long_edge = max(scale)
+        max_short_edge = min(scale)
+        scale_factor = min(max_long_edge / max(h, w),
+                           max_short_edge / min(h, w))
+    else:
+        raise TypeError(
+            f'Scale must be a number or tuple of int, but got {type(scale)}')
+
+    new_size = _scale_size((w, h), scale_factor)
+
+    if return_scale:
+        return new_size, scale_factor
+    else:
+        return new_size
+
+def imresize_to_multiple(
+    img: np.ndarray,
+    divisor: Union[int, Tuple[int, int]],
+    size: Union[int, Tuple[int, int], None] = None,
+    scale_factor: Union[float, Tuple[float, float], None] = None,
+    keep_ratio: bool = False,
+    return_scale: bool = False,
+    interpolation: str = 'bilinear',
+    #out: Optional[np.ndarray] = None,
+    #backend: Optional[str] = None
+) -> Union[Tuple[np.ndarray, float, float], np.ndarray]:
+    """Resize image according to a given size or scale factor and then rounds
+    up the the resized or rescaled image size to the nearest value that can be
+    divided by the divisor.
+
+    Args:
+        img (ndarray): The input image.
+        divisor (int | tuple): Resized image size will be a multiple of
+            divisor. If divisor is a tuple, divisor should be
+            (w_divisor, h_divisor).
+        size (None | int | tuple[int]): Target size (w, h). Default: None.
+        scale_factor (None | float | tuple[float]): Multiplier for spatial
+            size. Should match input size if it is a tuple and the 2D style is
+            (w_scale_factor, h_scale_factor). Default: None.
+        keep_ratio (bool): Whether to keep the aspect ratio when resizing the
+            image. Default: False.
+        return_scale (bool): Whether to return `w_scale` and `h_scale`.
+        interpolation (str): Interpolation method, accepted values are
+            "nearest", "bilinear", "bicubic", "area", "lanczos" for 'cv2'
+            backend, "nearest", "bilinear" for 'pillow' backend.
+        out (ndarray): The output destination.
+        backend (str | None): The image resize backend type. Options are `cv2`,
+            `pillow`, `None`. If backend is None, the global imread_backend
+            specified by ``mmcv.use_backend()`` will be used. Default: None.
+
+    Returns:
+        tuple | ndarray: (`resized_img`, `w_scale`, `h_scale`) or
+        `resized_img`.
+    """
+    h, w = img.shape[:2]
+    if size is not None and scale_factor is not None:
+        raise ValueError('only one of size or scale_factor should be defined')
+    elif size is None and scale_factor is None:
+        raise ValueError('one of size or scale_factor should be defined')
+    elif size is not None:
+        size = to_2tuple(size)
+        if keep_ratio:
+            size = rescale_size((w, h), size, return_scale=False)
+    else:
+        size = _scale_size((w, h), scale_factor)
+
+    divisor = to_2tuple(divisor)
+    size = tuple(int(np.ceil(s / d)) * d for s, d in zip(size, divisor))
+
+    resized_img = cv2.resize(
+        img,
+        size,
+        interpolation=interpolation
+    )
+    return resized_img
+    #resized_img, w_scale, h_scale = imresize(
+    #    img,
+    #    size,
+    #    return_scale=True,
+    #    interpolation=interpolation,
+    #    out=out,
+    #    backend=backend)
+    #if return_scale:
+    #    return resized_img, w_scale, h_scale
+    #else:
+    #    return resized_img
+
+class ResizeToMultiple(object):
+    """Resize images & seg to multiple of divisor.
+    Args:
+        size_divisor (int): images and gt seg maps need to resize to multiple
+            of size_divisor. Default: 32.
+        interpolation (str, optional): The interpolation mode of image resize.
+            Default: None
+    """
+
+    def __init__(self, size_divisor=32, interpolation=None):
+        self.size_divisor = size_divisor
+        self.interpolation = interpolation
+
+    #def __call__(self, results):
+    def __call__(self, img):
+        """Call function to resize images, semantic segmentation map to
+        multiple of size divisor.
+        Args:
+            results (dict): Result dict from loading pipeline.
+        Returns:
+            dict: Resized results, 'img_shape', 'pad_shape' keys are updated.
+        """
+        # Align image to multiple of size divisor.
+        #img = results['img']
+        #img = mmcv.imresize_to_multiple(
+        #    img,
+        #    self.size_divisor,
+        #    scale_factor=1,
+        #    interpolation=self.interpolation
+        #    if self.interpolation else 'bilinear')
+        img = imresize_to_multiple(
+            img=img,
+            divisor=self.size_divisor,
+            scale_factor=1,
+            interpolation=self.interpolation,
+            keep_ratio=True
+        )
+
+        #seg_map = imresize_to_multiple(
+        #    img,
+        #    self.size_divisor,
+        #    scale_factor=1,
+        #    interpolation=cv2.INTER_NEAREST
+
+        #)
+        #results['img'] = img
+        #results['img_shape'] = img.shape
+        #results['pad_shape'] = img.shape
+
+        # Align segmentation map to multiple of size divisor.
+        #for key in results.get('seg_fields', []):
+        #    gt_seg = results[key]
+        #    gt_seg = mmcv.imresize_to_multiple(
+        #        gt_seg,
+        #        self.size_divisor,
+        #        scale_factor=1,
+        #        interpolation='nearest')
+        #    results[key] = gt_seg
+
+        return img
+        #return results
+        #return img, seg_map
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += (f'(size_divisor={self.size_divisor}, '
+                     f'interpolation={self.interpolation})')
+        return repr_str
 
 
 #from dataset.camvid import CamVid
@@ -1739,6 +1960,15 @@ class RandomChoice():
         #return f"{super().__repr__()}(p={self.p})"
 
 #img_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/img.jpg'
+#img = cv2.imread(img_path)
+#trans = ResizeToMultiple()
+#img = img[:244, :300]
+#cv2.imwrite('resG5.png', img)
+#print(img.shape, img.shape[0] / img.shape[1])
+#img = trans(img)
+#cv2.imwrite('resP4.png', img)
+#print(img.shape, img.shape[0] / img.shape[1])
+#
 #img_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)/testA_16.bmp'
 #segmap_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)/testA_16_anno.bmp'
 #img = cv2.imread(img_path)

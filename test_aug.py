@@ -8,7 +8,6 @@ import torch.nn.functional as F
 
 
 
-# def slide_inference(img, )
 
 def resize(input,
            size=None,
@@ -140,8 +139,6 @@ def inference(img, ori_shape, flip_direction, mode, model, num_classes, crop_siz
     # assert all(_['ori_shape'] == ori_shape for _ in img_meta)
     # if self.test_cfg.mode == 'slide':
     if mode == 'slide':
-        # seg_logit = self.slide_inference(img, img_meta, rescale)
-        # seg_logit = slide_inference(img, ori_shape, rescale)
         seg_logit = slide_inference(
             img=img,
             ori_shape=ori_shape,

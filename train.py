@@ -95,7 +95,6 @@ def train(net, train_dataloader, val_loader, writer, args):
     #    'total_Dice': 0,
     #    'total_Haus': 9999,
     #}
-
     #with torch.profiler.profile(
     #    activities=[
     #        torch.profiler.ProfilerActivity.CPU,
@@ -582,7 +581,7 @@ if __name__ == '__main__':
     if args.gpu:
         net = net.cuda()
 
-    tensor = torch.Tensor(1, 3, settings.IMAGE_SIZE, settings.IMAGE_SIZE)
+    tensor = torch.Tensor(1, 3, 480, 480)
     utils.visualize_network(writer, net, tensor)
 
     train(net, train_loader, val_loader, writer, args)

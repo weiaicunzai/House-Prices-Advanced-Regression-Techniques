@@ -103,6 +103,9 @@ class UNet(nn.Module):
         (unpadded convolutions), each followed by a rectified linear unit
         (ReLU) and a 2x2 max pooling operation with stride 2 for downsampling.
         """
+        #assert x.shape[2] % 32 == 0
+        #assert x.shape[3] % 32 == 0
+
         xd1 = self.down1(x)
         x = self.maxpool(xd1)
 
@@ -168,6 +171,7 @@ class UNet(nn.Module):
 
 
 #net = UNet(3, 3)
+#print(sum(p.numel() for p in net.parameters() if p.requires_grad))
 #
 #img = torch.randn(3, 3, 512, 512)
 #

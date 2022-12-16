@@ -232,7 +232,9 @@ def make_blocks(
     dilation = prev_dilation = 1
     for stage_idx, (planes, num_blocks, db) in enumerate(zip(channels, block_repeats, drop_blocks(drop_block_rate))):
         stage_name = f'layer{stage_idx + 1}'  # never liked this name, but weight compat requires it
-        stride = 1 if stage_idx == 0 else 2
+        #stride = 1 if stage_idx == 0 else 2
+        stride = 2 if stage_idx == 1 else 1
+
         if net_stride >= output_stride:
             dilation *= stride
             stride = 1
@@ -246,7 +248,6 @@ def make_blocks(
                 stride=stride, dilation=dilation, first_dilation=prev_dilation, norm_layer=kwargs.get('norm_layer'))
             downsample = downsample_avg(**down_kwargs) if avg_down else downsample_conv(**down_kwargs)
 
-        #print(222, downsample, 111)
         block_kwargs = dict(reduce_first=reduce_first, dilation=dilation, drop_block=db, **kwargs)
         blocks = []
         for block_idx in range(num_blocks):
@@ -617,20 +618,32 @@ class ResNet(nn.Module):
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
+        out = []
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.act1(x)
+
+        #out.append(x)
+
         x = self.maxpool(x)
 
         #if self.grad_checkpointing and not torch.jit.is_scripting():
         #    x = checkpoint_seq([self.layer1, self.layer2, self.layer3, self.layer4], x, flatten=True)
         #else:
         x1 = self.layer1(x)
-        x2 = self.layer2(x1)
-        x3 = self.layer3(x2)
-        x4 = self.layer4(x3)
+        #out.append(x1)
 
-        return [x, x1, x3, x4]
+        x2 = self.layer2(x1)
+        #out.append(x2)
+
+        x3 = self.layer3(x2)
+        #out.append(x3)
+
+        x4 = self.layer4(x3)
+        out.append(x4)
+
+        #return [x, x1, x3, x4]
+        return out
 
 
         #return x
@@ -643,8 +656,9 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
-        output = self.forward_head(x[-1])
-        return output, x
+        #output = self.forward_head(x[-1])
+        #return output, x
+        return x
 
 IMAGENET_DEFAULT_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_DEFAULT_STD = (0.229, 0.224, 0.225)
@@ -1060,7 +1074,6 @@ def build_model_with_cfg(
     #kwargs.pop('pretrained_cfg')
 
     # Build the model
-    #print(kwargs, model_cls)
     model = model_cls(**kwargs) if model_cfg is None else model_cls(cfg=model_cfg, **kwargs)
     model.pretrained_cfg = pretrained_cfg
     model.default_cfg = model.pretrained_cfg  # alias for backwards compat
@@ -1078,11 +1091,7 @@ def build_model_with_cfg(
     url = pretrained_cfg.get('url', None)
     if pretrained:
         cached_file = download_cached_file(url)
-        #print(
-        #    cached_file
-        #)
         #model.load_(cached_file)
-        #print(model.fc.weight.mean())
         model.load_state_dict(torch.load(cached_file))
         #print(model.fc.weight.mean())
 
@@ -1126,14 +1135,13 @@ def build_model_with_cfg(
     return model
 
 
-# print(get_cache_dir())
 def _create_resnet(pretrained=False, pretrained_cfg=None, num_classes=1000,  **kwargs):
     return build_model_with_cfg(model_cls=ResNet, pretrained=pretrained, pretrained_cfg=pretrained_cfg, num_classes=num_classes, **kwargs)
 
 #def resnet50d(pretrained=)
 
 #def resnet50d(pretrained=False, **kwargs):
-def resnet50d(pretrained=False, num_classes=1000, **kwargs):
+def resnet50d(pretrained=True, num_classes=1000, **kwargs):
     """Constructs a ResNet-50-D model.
     """
     model_args = dict(
@@ -1141,7 +1149,7 @@ def resnet50d(pretrained=False, num_classes=1000, **kwargs):
 
     return _create_resnet(pretrained=pretrained, pretrained_cfg=default_cfgs['resnet50d'], num_classes=num_classes, **model_args)
 
-def resnet50(pretrained=False, num_classes=1000, **kwargs):
+def resnet50(pretrained=True, num_classes=1000, **kwargs):
     """Constructs a ResNet-50 model.
     """
     #model_args = dict(
@@ -1151,7 +1159,7 @@ def resnet50(pretrained=False, num_classes=1000, **kwargs):
     return _create_resnet(pretrained=pretrained, pretrained_cfg=default_cfgs['resnet50'], num_classes=num_classes, **model_args)
 
 
-def resnet101(pretrained=False, num_classes=1000, **kwargs):
+def resnet101(pretrained=True, num_classes=1000, **kwargs):
     """Constructs a ResNet-101 model.
     """
     model_args = dict(block=Bottleneck, layers=[3, 4, 23, 3], **kwargs)
@@ -1159,7 +1167,7 @@ def resnet101(pretrained=False, num_classes=1000, **kwargs):
     return _create_resnet(pretrained=pretrained, pretrained_cfg=default_cfgs['resnet101'], num_classes=num_classes, **model_args)
 
 
-def resnet101d(pretrained=False, num_classes=1000, **kwargs):
+def resnet101d(pretrained=True, num_classes=1000, **kwargs):
 #def resnet101d(pretrained=False, **kwargs):
     """Constructs a ResNet-101-D model.
     """
@@ -1186,9 +1194,9 @@ def resnet101d(pretrained=False, num_classes=1000, **kwargs):
 #        print(default_cfgs[i])
 
 #print(default_cfgs['resnet50d'])
-resnet = resnet101d(pretrained=True, num_classes=100)
+#resnet = resnet101d(pretrained=True, num_classes=100)
 #print(resnet)
-img = torch.randn(3, 3, 224, 224)
-print(resnet.fc.weight.mean())
-logits, feats = resnet(img)
-print(logits.shape)
+#img = torch.randn(3, 3, 224, 224)
+#print(resnet.fc.weight.mean())
+#logits, feats = resnet(img)
+#print(logits.shape)

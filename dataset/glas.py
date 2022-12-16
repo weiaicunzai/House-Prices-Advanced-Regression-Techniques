@@ -79,6 +79,7 @@ class Glas(Dataset):
         label[label > 0] = 1
 
 
+
         if self.image_set != 'train':
             img_meta = self.transforms(image, label)
             img_meta['img_name'] = self.image_names[index]

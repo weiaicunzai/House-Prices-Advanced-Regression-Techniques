@@ -226,6 +226,14 @@ def get_model(model_name, input_channels, class_num, args=None):
     elif model_name == 'fullnet':
         from models.fullnet import fullnet
         net = fullnet(class_num)
+
+    elif model_name == 'tg':
+        from models.tri_graph import tg
+        net = tg(class_num)
+
+    elif model_name == 'mgl':
+        from models.mgl.mglnet import mgl
+        net = mgl(class_num)
     else:
         raise ValueError('network type does not supported')
 
@@ -443,7 +451,7 @@ def data_loader(args, image_set):
         raise ValueError('datset {} not supported'.format(args.dataset))
 
     if image_set == 'train':
-        img_scale = (522, 775)
+        #img_scale = (522, 775)
         img_norm_cfg = dict(
         # mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
             mean=[200.2103937666394, 130.35073328696086, 200.7955948978498],
@@ -540,6 +548,9 @@ def data_loader(args, image_set):
         raise ValueError('image_set should be one of "train", "val", \
                 instead got "{}"'.format(image_set))
 
+    print('transforms:')
+    print(trans)
+    print()
     dataset.transforms = trans
 
 
