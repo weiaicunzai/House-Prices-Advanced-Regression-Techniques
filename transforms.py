@@ -1216,7 +1216,8 @@ class MultiScaleFlipAug(object):
                  std,
                  transforms=None,
                  flip=False,
-                 flip_direction='horizontal'):
+                 flip_direction='horizontal',
+                 resize_to_multiple=True):
 
         img_ratios = img_ratios if isinstance(img_ratios,
                                                   list) else [img_ratios]
@@ -1236,15 +1237,19 @@ class MultiScaleFlipAug(object):
         self.mean = torch.tensor(mean, dtype=torch.float32)
         self.std = torch.tensor(std, dtype=torch.float32)
         # print(self.flip_direction, 'cccccccccccccccccccccccccc')
-        self.resize_to_multiple = ResizeToMultiple(
-            interpolation=cv2.INTER_LINEAR,
-            size_divisor=32,
-        )
+        if resize_to_multiple:
+            self.resize_to_multiple = ResizeToMultiple(
+                interpolation=cv2.INTER_LINEAR,
+                size_divisor=32,
+            )
+
+        self.if_resize_to_multiple = resize_to_multiple
 
     def __repr__(self):
         repr_str = self.__class__.__name__
         repr_str += (f'(flip={self.flip}, '
                      f'img_ratios={self.img_ratios}), '
+                     f'resize_to_multiple={self.if_resize_to_multiple}), '
                      f'flip_direction={self.flip_direction})')
         return repr_str
 
@@ -1312,7 +1317,8 @@ class MultiScaleFlipAug(object):
         for ratio in self.img_ratios:
 
             resized_img = cv2.resize(img, (0, 0), fx=ratio, fy=ratio)
-            #resized_img = self.resize_to_multiple(resized_img)
+            if self.if_resize_to_multiple:
+                resized_img = self.resize_to_multiple(resized_img)
 
             for flip, direction in flip_param:
 
