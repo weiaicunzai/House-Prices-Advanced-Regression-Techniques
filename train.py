@@ -136,6 +136,7 @@ def train(net, train_dataloader, val_loader, writer, args):
             #    print(1111)
             #masks = images
 
+        optimizer.zero_grad()
         # print(torch.unique(masks))
         if args.fp16:
             with autocast():
@@ -153,8 +154,6 @@ def train(net, train_dataloader, val_loader, writer, args):
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
-            optimizer.zero_grad()
-
         else:
             preds = net(images)
             loss_ce = loss_fn_ce(preds, masks)
@@ -164,7 +163,6 @@ def train(net, train_dataloader, val_loader, writer, args):
             scaler.scale(loss).backward()
             loss.backward()
             optimizer.step()
-            optimizer.zero_grad()
 
         #if args.poly:
             #train_scheduler.step()
