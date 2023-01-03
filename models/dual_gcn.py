@@ -234,7 +234,7 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=4, multi_grid=(1, 2, 4))
 
         # # # DualGCN
-        self.head =DualGCNHead(2048, 512, num_classes)
+        self.head = DualGCNHead(2048, 512, num_classes)
 
         self.dsn = nn.Sequential(
             nn.Conv2d(1024, 512, kernel_size=3, stride=1, padding=1),
