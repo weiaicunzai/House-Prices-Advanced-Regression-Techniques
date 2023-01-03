@@ -19,7 +19,7 @@ class Glas(Dataset):
         if download:
             download_url(url, path, file_name, md5=md5)
 
-        self.class_names = ['background', 'gland']
+        self.class_names = ['background', 'gland', 'cnt']
         # self.ignore_index = -100
         self.ignore_index = 255
         self.class_num = len(self.class_names)
@@ -48,7 +48,8 @@ class Glas(Dataset):
         self.image_names = []
         for bmp in glob.iglob(search_path, recursive=True):
             if re.search(label_re, bmp):
-                self.labels.append(cv2.imread(bmp, -1))
+                self.labels.append(
+                    self.construct_contour(cv2.imread(bmp, -1)))
                 bmp = bmp.replace('_anno', '')
                 self.image_names.append(os.path.basename(bmp))
             #elif re.search(image_re, bmp):
@@ -61,6 +62,23 @@ class Glas(Dataset):
         self.image_set = image_set
 
         self.times = 30000
+
+
+    def construct_contour(self, label):
+        kernel = np.ones((3, 3), np.uint8)
+        #label_tmp = label.copy()
+        label[label > 0] = 1
+        #print(np.unique(label))
+        label_tmp = label.copy()
+        label = cv2.erode(label, kernel, iterations=4)
+        #print(np.unique(label))
+        label_tmp[label_tmp > 0] = 1
+        cnt = label_tmp - label
+        #print(np.unique(cnt))
+        label[cnt == 1] = 2
+
+        #return cnt
+        return label
 
     def __len__(self):
         if self.image_set == 'train':
@@ -76,7 +94,7 @@ class Glas(Dataset):
         image = self.images[index]
         label = self.labels[index]
         #print(np.unique(label))
-        label[label > 0] = 1
+        #label[label > 0] = 1
 
 
 
@@ -85,11 +103,10 @@ class Glas(Dataset):
             img_meta['img_name'] = self.image_names[index]
             return img_meta
 
-        if self.transforms is not None:
+        else:
+            if self.transforms is not None:
                 image, label = self.transforms(image, label)
-
-        return image, label
-
+            return image, label
 
 
 
@@ -98,10 +115,39 @@ class Glas(Dataset):
 
 
 
-#data = Glas('data', 'testB', download=True)
-#print(len(data))
+#import sys
+#sys.path.append(os.getcwd())
+#import transforms
 #
-#image, label, name = data[17]
+#crop_size=(480, 480)
+#trans = transforms.Compose([
+#            transforms.ElasticTransform(alpha=10, sigma=3, alpha_affine=30, p=0.5),
+#            transforms.Resize(range=[0.5, 1.5]),
+#            # transforms.RandomRotation(degrees=90, expand=False),
+#            transforms.RandomRotation(degrees=90, expand=True),
+#            transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True),
+#            transforms.RandomVerticalFlip(),
+#            transforms.RandomHorizontalFlip(),
+#            transforms.RandomApply(
+#                transforms=[transforms.PhotoMetricDistortion()]
+#            ),
+#            #transforms.ToTensor(),
+#            #transforms.Normalize(settings.MEAN, settings.STD)
+#        ])
+#
+##import transforms
+##trans = transforms.ElasticTransform(alpha=10, sigma=3, alpha_affine=30, p=1)
+#data = Glas('data', 'train', download=True, transforms=trans)
+#print(len(data))
+###
+#import random
+#image, label = random.choice(data)
+##print(label[label==255])
+##
+#cv2.imwrite('test.jpg', image)
+#cv2.imwrite('test1.jpg', label * 100)
+
+#print()
 #print(name)
 #print(np.unique(label))
 #
