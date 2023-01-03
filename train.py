@@ -379,8 +379,8 @@ def evaluate(net, val_dataloader, args):
     # acc = 0
 
     valid_dataset = val_dataloader.dataset
-    cls_names = valid_dataset.class_names
-    ig_idx = valid_dataset.ignore_index
+    #cls_names = valid_dataset.class_names
+    #ig_idx = valid_dataset.ignore_index
     with torch.no_grad():
         for img_metas in tqdm(val_dataloader):
             for img_meta in img_metas:
@@ -397,8 +397,10 @@ def evaluate(net, val_dataloader, args):
                     crop_size=(480, 480),
                     stride=(256, 256),
                     mode='slide',
-                    num_classes=2
+                    num_classes=valid_dataset.class_num
                 )
+
+                pred[pred > 1] = 0
 
                 img_name = img_meta['img_name']
 
