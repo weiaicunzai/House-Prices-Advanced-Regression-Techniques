@@ -1874,10 +1874,10 @@ def elastic_transform(
 
     img = cv2.remap(img, map1=map_x, map2=map_y, interpolation=interpolation, borderMode=border_mode, borderValue=value)
 
-    if interpolation == cv2.INTER_NEAREST:
-        kernel = np.ones((5,5),np.uint8)
-        img = cv2.erode(img, kernel, iterations=3)
-        img = cv2.dilate(img, kernel, iterations=3)
+    #if interpolation == cv2.INTER_NEAREST:
+        #kernel = np.ones((5,5),np.uint8)
+        #Wimg = cv2.erode(img, kernel, iterations=3)
+        #img = cv2.dilate(img, kernel, iterations=3)
 
     return img
 
@@ -1903,6 +1903,14 @@ class ElasticTransform:
         self.pad_value = pad_value
         self.same_dxdy = same_dxdy
         # interpolation=cv2.INTER_LINEAR,
+
+    def __repr__(self):
+        return self.__class__.__name__ + \
+            '(alpha={})'.format(self.alpha) + \
+            '(sigma={})'.format(self.sigma) + \
+            '(alpha_affine={})'.format(self.alpha_affine) + \
+            '(p={})'.format(self.p)
+
 
     def __call__(self, img, seg_map):
 
