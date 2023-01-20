@@ -5,6 +5,7 @@ import re
 import random
 import numbers
 import queue
+from collections import OrderedDict
 
 import numpy as np
 import torch
@@ -200,8 +201,8 @@ def get_model(model_name, input_channels, class_num, args=None):
         net = SegNet(input_channels, class_num)
 
     elif model_name == 'deeplabv3plus':
-        #from models.deeplabv3plus import deeplabv3plus
-        from models.deeplabv3plus_tmp import deeplab as deeplabv3plus
+        from models.deeplabv3plus import deeplabv3plus
+        #from models.deeplabv3plus_tmp import deeplab as deeplabv3plus
         net = deeplabv3plus(class_num)
 
     elif model_name == 'transunet':
@@ -385,43 +386,93 @@ def print_eval(class_names, results):
     print(msg)
 
 def pretrain_training_transforms():
-    import transforms_pretrain
-    trans = transforms_pretrain.Compose([
-            #transforms_pretrain.EncodingLable(),
-            transforms_pretrain.RandomHorizontalFlip(),
-            transforms_pretrain.RandomVerticalFlip(),
-            transforms_pretrain.RandomRotation(15, fill=0),
-            transforms_pretrain.ColorJitter(0.4, 0.4),
-            transforms_pretrain.RandomGaussianBlur(),
-            transforms_pretrain.RandomScaleCrop(settings.IMAGE_SIZE),
-            transforms_pretrain.ToTensor(),
-            transforms_pretrain.Normalize(settings.MEAN, settings.STD),
+
+    crop_size=(256, 256)
+    #crop_size=(480, 480)
+    trans = transforms.Compose([
+            transforms.ElasticTransform(alpha=10, sigma=3, alpha_affine=20, p=0.5),
+            # transforms.RandomRotation(degrees=90, expand=False),
+            transforms.RandomRotation(degrees=90, expand=True),
+            transforms.Resize(range=[0.5, 1.5]),
+            #transforms.Resize(min_size=208 + 30),
+            #transforms.Resize(min_size=256),
+            transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True),
+            transforms.RandomVerticalFlip(),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomApply(
+                transforms=[transforms.PhotoMetricDistortion()]
+            ),
+            transforms.ToTensor(),
+            transforms.Normalize(settings.MEAN, settings.STD)
         ])
+
+    #import transforms_pretrain
+    #trans = transforms_pretrain.Compose([
+    #        #transforms_pretrain.EncodingLable(),
+    #        transforms_pretrain.RandomHorizontalFlip(),
+    #        transforms_pretrain.RandomVerticalFlip(),
+    #        transforms_pretrain.RandomRotation(15, fill=0),
+    #        transforms_pretrain.ColorJitter(0.4, 0.4),
+    #        transforms_pretrain.RandomGaussianBlur(),
+    #        transforms_pretrain.RandomScaleCrop(settings.IMAGE_SIZE),
+    #        transforms_pretrain.ToTensor(),
+    #        transforms_pretrain.Normalize(settings.MEAN, settings.STD),
+    #    ])
 
     return trans
 
 def pretrain_test_transforms():
-    import transforms_pretrain
-    trans = transforms_pretrain.Compose([
-            #transforms_pretrain.EncodingLable(),
-            #transforms_pretrain.RandomHorizontalFlip(),
-            #transforms_pretrain.RandomVerticalFlip(),
-            #transforms_pretrain.RandomRotation(15, fill=0),
-            #transforms_pretrain.ColorJitter(0.4, 0.4),
-            #transforms_pretrain.RandomGaussianBlur(),
-            transforms_pretrain.RandomScaleCrop(settings.IMAGE_SIZE),
-            transforms_pretrain.ToTensor(),
-            transforms_pretrain.Normalize(settings.MEAN, settings.STD),
-        ])
+
+    trans = transforms.MultiScaleFlipAug(
+            #img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
+            img_ratios=[1],
+            #flip=True,
+            flip=False,
+            #flip_direction=['horizontal', 'vertical'],
+            #flip_direction=['horizontal'],
+            flip_direction=['h'],
+            # transforms=[
+                # transforms.ToTensor(),
+                # transforms.Normalize(settings.MEAN, settings.STD),
+            # ]
+            resize_to_multiple=False,
+            #min_size=256,
+            #min_size=480,
+            min_size=208,
+            #min_size=None,
+            mean=settings.MEAN,
+            std=settings.STD
+        )
+    #import transforms_pretrain
+    #trans = transforms_pretrain.Compose([
+    #        #transforms_pretrain.EncodingLable(),
+    #        #transforms_pretrain.RandomHorizontalFlip(),
+    #        #transforms_pretrain.RandomVerticalFlip(),
+    #        #transforms_pretrain.RandomRotation(15, fill=0),
+    #        #transforms_pretrain.ColorJitter(0.4, 0.4),
+    #        #transforms_pretrain.RandomGaussianBlur(),
+    #        transforms_pretrain.RandomScaleCrop(settings.IMAGE_SIZE),
+    #        transforms_pretrain.ToTensor(),
+    #        transforms_pretrain.Normalize(settings.MEAN, settings.STD),
+    #    ])
 
     return trans
 
 def data_loader(args, image_set):
 
+    def multiscale_collate(batch):
+
+        res = []
+        for img_meta in batch:
+            #res.append([img, gt_seg])
+            res.append(img_meta)
+
+        return res
+
     if args.pretrain:
 
         dataset = PreTraining(
-                'data/pre_training/',
+                #'data/pre_training/',
                 image_set=image_set
             )
 
@@ -431,8 +482,24 @@ def data_loader(args, image_set):
             trans = pretrain_test_transforms()
 
         dataset.transforms = trans
+        if image_set != 'train':
+            batch_size = 4
+            shuffle = False
+            collate_fn=multiscale_collate
+        else:
+            batch_size = args.b
+            shuffle = True
+            collate_fn=None
+
         data_loader = torch.utils.data.DataLoader(
-                dataset, batch_size=args.b, num_workers=4, shuffle=False, pin_memory=True)
+                dataset,
+                batch_size=batch_size,
+                num_workers=4,
+                shuffle=shuffle,
+                collate_fn=collate_fn,
+                persistent_workers=True,
+                prefetch_factor=4,
+                pin_memory=True)
 
         return data_loader
 
@@ -460,12 +527,12 @@ def data_loader(args, image_set):
 
     if image_set == 'train':
         #img_scale = (522, 775)
-        img_norm_cfg = dict(
-        # mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
-            mean=[200.2103937666394, 130.35073328696086, 200.7955948978498],
-            std=[33.296002816472495, 62.533182555417845, 42.21131635702842],
-            to_rgb=True
-        )
+        #img_norm_cfg = dict(
+        ## mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
+        #    mean=[200.2103937666394, 130.35073328696086, 200.7955948978498],
+        #    std=[33.296002816472495, 62.533182555417845, 42.21131635702842],
+        #    to_rgb=True
+        #)
 
 
 #        trans = mmtransform.Compose(
@@ -497,11 +564,13 @@ def data_loader(args, image_set):
         #])
 
         crop_size=(480, 480)
+        #crop_size=(208, 208)
         trans = transforms.Compose([
             transforms.ElasticTransform(alpha=10, sigma=3, alpha_affine=30, p=0.5),
-            transforms.Resize(range=[0.5, 1.5]),
             # transforms.RandomRotation(degrees=90, expand=False),
             transforms.RandomRotation(degrees=90, expand=True),
+            transforms.Resize(range=[0.5, 1.5]),
+            #transforms.Resize(min_size=208 + 30),
             transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True),
             transforms.RandomVerticalFlip(),
             transforms.RandomHorizontalFlip(),
@@ -522,15 +591,23 @@ def data_loader(args, image_set):
         #])
 
         trans = transforms.MultiScaleFlipAug(
-            img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
-            #flip=True,
-            flip=False,
-            # flip_direction=['horizontal', 'vertical'],
-            flip_direction=['horizontal'],
+            #img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
+            img_ratios=[1],
+            flip=True,
+            #flip=False,
+            #flip_direction=['horizontal', 'vertical', ],
+            flip_direction=['h', 'v'],
+            #flip_direction=['h', 'v', 'hv', 'r90'],
+            #flip_direction=['h', 'v'],
+            #flip_direction=['horizontal'],
             # transforms=[
                 # transforms.ToTensor(),
                 # transforms.Normalize(settings.MEAN, settings.STD),
             # ]
+            resize_to_multiple=False,
+            #min_size=208,
+            #min_size=None,
+            min_size=480,
             mean=settings.MEAN,
             std=settings.STD
         )
@@ -561,14 +638,14 @@ def data_loader(args, image_set):
     dataset.transforms = trans
 
 
-    def multiscale_collate(batch):
+    #def multiscale_collate(batch):
 
-        res = []
-        for img_meta in batch:
-            #res.append([img, gt_seg])
-            res.append(img_meta)
+    #    res = []
+    #    for img_meta in batch:
+    #        #res.append([img, gt_seg])
+    #        res.append(img_meta)
 
-        return res
+    #    return res
 
     if image_set == 'test':
         data_loader = torch.utils.data.DataLoader(
@@ -579,7 +656,8 @@ def data_loader(args, image_set):
             collate_fn=multiscale_collate)
     else:
         data_loader = torch.utils.data.DataLoader(
-                dataset, batch_size=args.b, num_workers=4, shuffle=True, pin_memory=True, persistent_workers=True,
+                dataset, batch_size=args.b, num_workers=4, shuffle=True, pin_memory=True,
+                persistent_workers=True,
                 prefetch_factor=4
                 )
 
@@ -936,7 +1014,7 @@ class CheckPointManager:
 
                 # saving best ckpt
                 ckpt_path = os.path.join(self.save_path,
-                            'best_{}_{}_iter_{}.pt'.format(m, v, iter_idx)
+                            'best_{}_{:.4f}_iter_{}.pt'.format(m, v, iter_idx)
                     )
                 print('saving best checkpoint file to {}'.format(ckpt_path))
                 torch.save(model.state_dict(), ckpt_path)
@@ -952,3 +1030,64 @@ class CheckPointManager:
                 # update values
                 self.best_value[m] = v
                 self.best_path[m] = ckpt_path
+
+
+def on_load_checkpoint(model_state_dict, pretrained_state_dict):
+    #new_state_dict = model.state_dict()
+    #state_dict = pretrained.state_dict()
+    #model_state_dict = self.state_dict()
+    #is_changed = False
+
+    new_state_dict = OrderedDict()
+    for model_key in model_state_dict.keys():
+        model_tensor = model_state_dict[model_key]
+
+        if model_key in pretrained_state_dict.keys():
+            pretrain_tensor = pretrained_state_dict[model_key]
+            #print(pretrain_tensor.shape)
+            if pretrain_tensor.shape != model_tensor.shape:
+                #print(pretrain_tensor.shape, model_tensor.shape)
+                pretrain_tensor.resize_(model_tensor.shape)
+
+            #print(pretrain_tensor.shape)
+            new_state_dict[model_key] = pretrain_tensor
+        else:
+            #print('heelo')
+            #print(model_key)
+            new_state_dict[model_key] = model_tensor
+
+        #pretrain_tensor = pretrained_state_dict[pretrain_key]
+
+    return new_state_dict
+    #for model_key, pretrain_key, in zip(model_state_dict.keys(), pretrained_state_dict.keys()):
+    #    #print(key1, key2)
+    #    #assert model_key == pretrain_key
+    #    model_tensor = model_state_dict[model_key]
+    #    pretrain_tensor = pretrained_state_dict[pretrain_key]
+    #    if model_tensor.shape != pretrain_tensor.shape:
+    #        #print(pretrain_tensor.shape)
+    #        pretrain_tensor.resize_(*model_tensor.shape)
+    #        #print(pretrain_tensor.shape)
+
+    #return pretrained_state_dict
+            #print(pretrained_state_dict[pretrain_key].shape)
+        #if model_state_dict[model_key].shape != pretrained_state_dict[pretrain_key].shape:
+            #print(model_key, pretrain_key)
+            #print(model_state_dict[model_key].shape,  pretrained_state_dict[pretrain_key].shape)
+            #print(pretrained_state_dict[pretrain_key])
+            #print(pretrained_state_dict[pretrain_key].resize_())
+
+    #for k in state_dict:
+    #    if k in model_state_dict:
+    #        if state_dict[k].shape != model_state_dict[k].shape:
+    #            logger.info(f"Skip loading parameter: {k}, "
+    #                        f"required shape: {model_state_dict[k].shape}, "
+    #                        f"loaded shape: {state_dict[k].shape}")
+    #            state_dict[k] = model_state_dict[k]
+    #            is_changed = True
+    #    else:
+    #        logger.info(f"Dropping parameter {k}")
+    #        is_changed = True
+
+    #if is_changed:
+    #    checkpoint.pop("optimizer_states", None)
