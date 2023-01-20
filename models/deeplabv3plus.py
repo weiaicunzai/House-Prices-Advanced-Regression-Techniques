@@ -217,6 +217,6 @@ def deeplabv3plus(class_num):
 
 
 
-net = deeplabv3plus(32)
-img = torch.randn(2, 3, 512, 512)
-print(net(img).shape)
+#net = deeplabv3plus(32)
+#img = torch.randn(2, 3, 512, 512)
+#print(net(img).shape)
