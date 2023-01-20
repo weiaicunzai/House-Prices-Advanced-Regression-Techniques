@@ -130,4 +130,4 @@ class WeightedLossWarpper:
         if self.sampler is not None:
             loss = loss * seg_weight
 
-        return loss.mean()
+        return loss
