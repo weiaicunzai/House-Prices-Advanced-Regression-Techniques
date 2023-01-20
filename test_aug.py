@@ -30,7 +30,7 @@ def resize(input,
                         f'out size {(output_h, output_w)} is `nx+1`')
     return F.interpolate(input, size, scale_factor, mode, align_corners)
 
-def slide_inference(img, ori_shape, model, crop_size, stride, num_classes):
+def slide_inference(img, ori_shape, model, crop_size, stride, rescale, num_classes):
     """Inference by sliding-window with overlap.
     If h_crop > h_img or w_crop > w_img, the small patch will be used to
     decode without padding.
@@ -80,24 +80,42 @@ def slide_inference(img, ori_shape, model, crop_size, stride, num_classes):
     # resize_shape = img_meta[0]['img_shape'][:2]
         # preds = preds[:, :, :resize_shape[0], :resize_shape[1]]
     #print(preds.shape)
-    preds = resize(preds,
-            # size=img_meta[0]['ori_shape'][:2],
+
+    #################################
+    #gland_preds = preds[:, :2, :, :]
+    #cnt_preds = preds[:, 2:, :, :]
+    #gland_preds = resize(gland_preds,
+    #        size=ori_shape,
+    #        mode='bilinear',
+    #        align_corners=True,
+    #        warning=False)
+    #cnt_preds = resize(cnt_preds,
+    #        size=ori_shape,
+    #        mode='bilinear',
+    #        align_corners=True,
+    #        warning=False)
+    #preds = torch.cat([gland_preds, cnt_preds], dim=1)
+    #################################
+
+
+    if rescale:
+        preds = resize(preds,
             size=ori_shape,
             mode='bilinear',
-            # align_corners=align_corners,
+            align_corners=True,
             warning=False)
 
-    # preds = preds.squeeze(0)
     return preds
 
 
 # def whole_inference(img, ori_shape, )
 
 # def whole_inference(self, img, img_meta, rescale):
-def whole_inference(img, ori_shape, model):
+def whole_inference(img, ori_shape, model, rescale):
         """Inference with full image."""
 
         # seg_logit = self.encode_decode(img, img_meta)
+        img = img.unsqueeze(0).cuda()
         seg_logit = model(img)
         # if rescale:
             # support dynamic shape for onnx
@@ -108,18 +126,20 @@ def whole_inference(img, ori_shape, model):
                 # resize_shape = img_meta[0]['img_shape'][:2]
                 # seg_logit = seg_logit[:, :, :resize_shape[0], :resize_shape[1]]
                 # size = img_meta[0]['ori_shape'][:2]
-        seg_logit = resize(
+
+        if rescale:
+            seg_logit = resize(
                 seg_logit,
                 # size=size,
                 size=ori_shape,
                 mode='bilinear',
-                # align_corners=self.align_corners,
+                align_corners=True,
                 warning=False)
 
         return seg_logit
 
 
-def inference(img, ori_shape, flip_direction, mode, model, num_classes, crop_size=None, stride=None):
+def inference(img, ori_shape, flip_direction, mode, model, num_classes, crop_size=None, stride=None, rescale=True):
     """Inference a single image with slide/whole style.
     Args:
         img (Tensor): The input image of shape (N, 3, H, W).
@@ -146,12 +166,14 @@ def inference(img, ori_shape, flip_direction, mode, model, num_classes, crop_siz
             crop_size=crop_size,
             stride=stride,
             model=model,
+            rescale=rescale,
             num_classes=num_classes)
     else:
         # seg_logit = self.whole_inference(img, img_meta, rescale)
         seg_logit = whole_inference(
             img=img,
             ori_shape=ori_shape,
+            rescale=rescale,
             model=model
         )
 
@@ -160,30 +182,45 @@ def inference(img, ori_shape, flip_direction, mode, model, num_classes, crop_siz
     if num_classes == 1:
          output = F.sigmoid(seg_logit)
     else:
+        #gland_output = seg_logit[:, :2, :, :]
+        #cnt_output = seg_logit[:, 2:, :, :]
+        #gland_output = F.softmax(gland_output, dim=1)
+        #cnt_output = F.softmax(cnt_output, dim=1)
+        #output = torch.cat([gland_output, cnt_output], dim=1)
         output = F.softmax(seg_logit, dim=1)
-    # flip = img_meta[0]['flip']
 
-    # flip
 
     # if flip:
         # flip_direction = img_meta[0]['flip_direction']
         # assert flip_direction in ['horizontal', 'vertical']
-    if flip_direction == 'horizontal':
+    #if flip_direction == 'horizontal':
+    if flip_direction == 'h':
             output = output.flip(dims=(3, ))
         # elif flip_direction == 'vertical':
-    if flip_direction == 'vertical':
+    if flip_direction == 'v':
             output = output.flip(dims=(2, ))
+
+    if flip_direction == 'hv':
+            output = output.flip(dims=(2, ))
+            output = output.flip(dims=(3, ))
+        #output = output.flip(dims=)
+
+    if flip_direction == 'r90':
+            output = torch.rot90(output, k=1, dims=[2, 3])
+            #output = output.flip(dims=(3, ))
 
     return output
 
-def aug_test(imgs, flip_direction, ori_shape, model, num_classes, mode, threshold=0.5, crop_size=None, stride=None):
+def aug_test(imgs, flip_direction, ori_shape, model, num_classes, mode, threshold=0.5, crop_size=None, stride=None, rescale=True):
     """aug_test:  test time augmentation with different img_ratios"""
     """aug_data: list of (img, gt_seg) pairs with img_ratios"""
     # print(stride)
 
 
     seg_logit = 0
+    count = 0
     for img, flip_direction in zip(imgs, flip_direction):
+        #print(img.shape)
         # if idx == 0:
             # continue
         # img, gt_seg = data
@@ -196,24 +233,38 @@ def aug_test(imgs, flip_direction, ori_shape, model, num_classes, mode, threshol
             mode=mode,
             crop_size=crop_size,
             stride=stride,
+            rescale=rescale,
             num_classes=num_classes)
 
         # if seg_logit is None:
             # seg_logit = cur_seg_logit
+
+        #count += 1
+        #import cv2
+        #print(cur_seg_logit.shape)
+        #cv2.imwrite('test{}.png'.format(count), cur_seg_logit.argmax(dim=1).squeeze(0).cpu().numpy() * 80)
+        #print(count)
         #else:
         seg_logit += cur_seg_logit
 
     seg_logit /= len(imgs)
+    #import sys; sys.exit()
     # if self.out_channels == 1:
+
     if num_classes == 1:
         seg_pred = (seg_logit > threshold).to(seg_logit).squeeze(1)
     else:
         seg_pred = seg_logit.argmax(dim=1)
 
-    seg_pred = seg_pred.cpu().numpy()
+    #gland_pred = seg_logit[:, :2, :, :].argmax(dim=1)
+    #cnt_pred = seg_logit[:, 2:, :, :].argmax(dim=1)
+    #gland_pred[cnt_pred==1] = 0
+    #seg_pred = gland_pred
 
+
+    seg_pred = seg_pred.cpu().numpy()
     seg_pred = seg_pred.squeeze()
 
     # unravel batch dim
     # seg_pred = list(seg_pred)
-    return seg_pred
+    return seg_pred, seg_logit
