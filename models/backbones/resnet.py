@@ -618,7 +618,7 @@ class ResNet(nn.Module):
         self.global_pool, self.fc = create_classifier(self.num_features, self.num_classes, pool_type=global_pool)
 
     def forward_features(self, x):
-        out = []
+        out = {}
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.act1(x)
@@ -631,6 +631,7 @@ class ResNet(nn.Module):
         #    x = checkpoint_seq([self.layer1, self.layer2, self.layer3, self.layer4], x, flatten=True)
         #else:
         x1 = self.layer1(x)
+        out['low_level'] = x1
         #out.append(x1)
 
         x2 = self.layer2(x1)
@@ -638,15 +639,14 @@ class ResNet(nn.Module):
 
         x3 = self.layer3(x2)
         #out.append(x3)
+        out['aux'] = x3
 
         x4 = self.layer4(x3)
-        out.append(x4)
+        #out.append(x4)
+        out['out'] = x4
 
-        #return [x, x1, x3, x4]
         return out
 
-
-        #return x
 
     def forward_head(self, x, pre_logits: bool = False):
         x = self.global_pool(x)
