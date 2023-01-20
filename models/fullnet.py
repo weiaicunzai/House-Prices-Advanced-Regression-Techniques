@@ -189,7 +189,7 @@ class FCN_pooling(nn.Module):
         return out
 
 
-def fullnet(branch='both', num_classes=2):
+def fullnet(num_classes=2):
     net = FullNet(color_channels=3, output_channels=num_classes, n_layers=6, growth_rate=24, compress_ratio=0.5, drop_rate=0.1, dilations=(1,2,4,8,16,4,1), is_hybrid=True, layer_type='basic')
     return net
 
