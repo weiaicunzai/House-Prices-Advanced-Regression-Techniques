@@ -172,7 +172,6 @@ def eval_metrics(results,
     return ret_metrics
 
 
-import skimage.morphology as morph
 
 #def assign_colors(img, num):
 #    colors = [
@@ -208,25 +207,16 @@ def gland_accuracy_object_level(pred, gt):
     if not isinstance(gt, np.ndarray):
         gt = np.array(gt)
 
-    #print('gland acc function', pred.shape, gt.shape)
     # remove small object size
-    pred = pred == 1
+    pred = morph.label(pred, connectivity=2)
     pred = morph.remove_small_objects(pred, 100)  # remove small object
-    #pred = measure.label(pred)
-    #pred = morph.dilation(pred, selem=morph.selem.disk(4))
-
-
-    # get connected components
     pred_labeled = morph.label(pred, connectivity=2)
-    pred_labeled = morph.remove_small_objects(pred_labeled)   # remove 1 or 2 pixel noise in the image
-    pred_labeled = morph.label(pred_labeled, connectivity=2)
-
     Ns = len(np.unique(pred_labeled)) - 1
+
     gt_labeled = morph.label(gt, connectivity=2)
-    gt_labeled = morph.remove_small_objects(gt_labeled)   # remove 1 or 2 pixel noise in the image
+    gt_labeled = morph.remove_small_objects(gt_labeled, 100)   # remove 1 or 2 pixel noise in the image
     gt_labeled = morph.label(gt_labeled, connectivity=2)
     Ng = len(np.unique(gt_labeled)) - 1
-    #print('ffffff', pred_labeled.shape, gt_labeled.shape)
 
     #gt_colors = assign_colors(gt_labeled, Ng + 1)
     #pred_colors = assign_colors(pred_labeled, Ns + 1)
@@ -243,8 +233,6 @@ def gland_accuracy_object_level(pred, gt):
         overlap_parts = img_and * gt_labeled
         obj_no = np.unique(overlap_parts)
         obj_no = obj_no[obj_no != 0]
-
-        # show_figures((img_i, overlap_parts))
 
         # no intersection object
         if obj_no.size == 0:
@@ -401,3 +389,52 @@ def gland_accuracy_object_level(pred, gt):
 #        metrics='mIoU',
 #        nan_to_num=-1)
 #print(round(all_acc, 4), acc, iou)
+
+
+def accuracy_pixel_level(output, target):
+    """ Computes the accuracy during training and validation for ternary label """
+    #batch_size = target.shape[0]
+    #results = np.zeros((6,), np.float)
+
+    #for i in range(batch_size):
+        #pred = output[i, :, :]
+        #label = target[i, :, :]
+
+    pred = output
+    label = target
+    #print(pred.shape, label.shape)
+    #import sys; sys.exit()
+    # inside part
+    pred_inside = pred == 1
+    label_inside = label == 1
+    metrics_inside = compute_pixel_level_metrics(pred_inside, label_inside)
+
+        #results += np.array(metrics_inside)
+
+    #return [value/batch_size for value in results]
+    return metrics_inside
+
+
+def compute_pixel_level_metrics(pred, target):
+    """ Compute the pixel-level tp, fp, tn, fn between
+    predicted img and groundtruth target
+    """
+
+    if not isinstance(pred, np.ndarray):
+        pred = np.array(pred)
+    if not isinstance(target, np.ndarray):
+        target = np.array(target)
+
+    tp = np.sum(pred * target)  # true postives
+    tn = np.sum((1-pred) * (1-target))  # true negatives
+    fp = np.sum(pred * (1-target))  # false postives
+    fn = np.sum((1-pred) * target)  # false negatives
+
+    precision = tp / (tp + fp + 1e-10)
+    recall = tp / (tp + fn + 1e-10)
+    F1 = 2 * precision * recall / (precision + recall + 1e-10)
+    acc = (tp + tn) / (tp + fp + tn + fn + 1e-10)
+    performance = (recall + tn/(tn+fp+1e-10)) / 2
+    iou = tp / (tp+fp+fn+1e-10)
+
+    return np.array([acc, iou, recall, precision, F1, performance])
