@@ -3,220 +3,226 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class DepthWiseSeperable(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, **kwargs):
-        super().__init__()
-        """extra batch normalization [75] and ReLU activation are added
-        after each 3 × 3 depthwise convolution, similar to MobileNet design [29].
-        """
-        self.depthwise = nn.Sequential(
-                            nn.Conv2d(in_channels, in_channels, kernel_size, groups=in_channels, **kwargs),
-                            nn.BatchNorm2d(in_channels),
-                            nn.ReLU(inplace=True)
-                        )
-
-        self.pointwise = nn.Conv2d(in_channels, out_channels, 1)
+class DeepLabV3Plus(nn.Module):
+    def __init__(self, backbone, classifier, aux_classifier=None):
+        super(DeepLabV3Plus, self).__init__()
+        self.backbone = backbone
+        self.classifier = classifier
+        self.aux_classifier = aux_classifier
 
     def forward(self, x):
-        x = self.depthwise(x)
-        x = self.pointwise(x)
+        input_shape = x.shape[-2:]
+        # features.keys(): low_level,  out
+        #print(type(self.backbone)) network.utils.IntermediateLayerGetter
+        features = self.backbone(x)
+        #print(features.keys())
+        #print(type(features))
+        #print(type`(self.classifier), 'ccccccc')
+        x = self.classifier(features) # DeepLabHeadV3Plus
+        x = F.interpolate(x, size=input_shape, mode='bilinear', align_corners=False)
 
-        return x
+        if not self.training:
+            return x
 
+        if self.aux_classifier is not None:
+            aux = self.aux_classifier(features)
+            aux = F.interpolate(aux, size=input_shape, mode='bilinear', align_corners=False)
 
-class BasicBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1):
+        return x, aux
+
+class AuxClassifier(nn.Module):
+    def __init__(self, in_channels, out_channels):
         super().__init__()
-        self.conv1 = DepthWiseSeperable(in_channels, out_channels, kernel_size, padding=1)
-        self.conv2 = DepthWiseSeperable(out_channels, out_channels, kernel_size, padding=1)
-        self.conv3 = DepthWiseSeperable(out_channels, out_channels, kernel_size, stride=stride, padding=1)
-
-        self.shortcut = nn.Sequential()
-
-        if stride != 1:
-            self.shortcut = nn.Sequential(
-                nn.Conv2d(in_channels, out_channels, 1, stride=stride),
-                nn.BatchNorm2d(out_channels)
-            )
-
-    def forward(self, x):
-        shortcut = self.shortcut(x)
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        return x + shortcut
-
-
-class Xception(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.stem = nn.Sequential(
-            nn.Conv2d(3, 32, 3, stride=2, padding=1),
-            nn.BatchNorm2d(32),
+        self.aux_classifier = nn.Sequential(
+            nn.Conv2d(in_channels, 256, 3, padding=1, bias=False),
+            nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
-            nn.Conv2d(32, 64, 3, stride=1, padding=1),
-            nn.BatchNorm2d(64),
+            nn.Conv2d(256, out_channels, 1)
+        )
+
+    def forward(self, x):
+        return self.aux_classifier(x['aux'])
+
+class DeepLabHeadV3Plus(nn.Module):
+    def __init__(self, in_channels, low_level_channels, num_classes, aspp_dilate=[12, 24, 36]):
+        super(DeepLabHeadV3Plus, self).__init__()
+        self.project = nn.Sequential(
+            nn.Conv2d(low_level_channels, 48, 1, bias=False),
+            nn.BatchNorm2d(48),
+            nn.ReLU(inplace=True),
+        )
+
+        self.aspp = ASPP(in_channels, aspp_dilate)
+
+        self.classifier = nn.Sequential(
+            nn.Conv2d(304, 256, 3, padding=1, bias=False),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, num_classes, 1)
+        )
+        self._init_weight()
+
+    def forward(self, feature):
+        low_level_feature = self.project( feature['low_level'] )
+        output_feature = self.aspp(feature['out'])
+        output_feature = F.interpolate(output_feature, size=low_level_feature.shape[2:], mode='bilinear', align_corners=False)
+        return self.classifier( torch.cat( [ low_level_feature, output_feature ], dim=1 ) )
+
+    def _init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
+class DeepLabHead(nn.Module):
+    def __init__(self, in_channels, num_classes, aspp_dilate=[12, 24, 36]):
+        super(DeepLabHead, self).__init__()
+
+        self.classifier = nn.Sequential(
+            ASPP(in_channels, aspp_dilate),
+            nn.Conv2d(256, 256, 3, padding=1, bias=False),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, num_classes, 1)
+        )
+        self._init_weight()
+
+    def forward(self, feature):
+        return self.classifier( feature['out'] )
+
+    def _init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
+class AtrousSeparableConvolution(nn.Module):
+    """ Atrous Separable Convolution
+    """
+    def __init__(self, in_channels, out_channels, kernel_size,
+                            stride=1, padding=0, dilation=1, bias=True):
+        super(AtrousSeparableConvolution, self).__init__()
+        self.body = nn.Sequential(
+            # Separable Conv
+            nn.Conv2d( in_channels, in_channels, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation, bias=bias, groups=in_channels ),
+            # PointWise Conv
+            nn.Conv2d( in_channels, out_channels, kernel_size=1, stride=1, padding=0, bias=bias),
+        )
+
+        self._init_weight()
+
+    def forward(self, x):
+        return self.body(x)
+
+    def _init_weight(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight)
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
+class ASPPConv(nn.Sequential):
+    def __init__(self, in_channels, out_channels, dilation):
+        modules = [
+            nn.Conv2d(in_channels, out_channels, 3, padding=dilation, dilation=dilation, bias=False),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True)
-        )
-        self.in_channels = 64
+        ]
+        super(ASPPConv, self).__init__(*modules)
 
-        self.entry_flow1 = self._make_layers([2], [128])
-        self.entry_flow2 = self._make_layers([2, 2], [256, 728])
-        self.middle_flow = self._make_layers([1] * 16, [728] * 16)
-        #Note that we do not employ the multi-grid method [77,78,23],
-        #which we found does not improve the performance.
-        self.exit_flow1 = nn.Sequential(
-            DepthWiseSeperable(728, 728, 3, padding=1),
-            DepthWiseSeperable(728, 1024, 3, padding=1),
-            DepthWiseSeperable(1024, 1024, 3, stride=2, padding=1),
-        )
-        self.exit_flow_shortcut = nn.Sequential(
-            nn.Conv2d(728, 1024, 1, stride=2),
-            nn.BatchNorm2d(1024)
-        )
-
-        self.exit_flow2 = nn.Sequential(
-            DepthWiseSeperable(1024, 1536, 3, padding=1),
-            DepthWiseSeperable(1536, 1536, 3, padding=1),
-            DepthWiseSeperable(1536, 2048, 3, padding=1)
-        )
-
+class ASPPPooling(nn.Sequential):
+    def __init__(self, in_channels, out_channels):
+        super(ASPPPooling, self).__init__(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(in_channels, out_channels, 1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True))
 
     def forward(self, x):
-        x = self.stem(x)
-        low_level = self.entry_flow1(x)
-        x = self.entry_flow2(low_level)
-        x = self.middle_flow(x)
-        shortcut = self.exit_flow_shortcut(x)
-        x = self.exit_flow1(x)
-        x = x + shortcut
-        x = self.exit_flow2(x)
-
-        return low_level, x
-
-    def _make_layers(self, strides, out_channels):
-        assert len(strides) == len(out_channels)
-        l = []
-        for stride, out in zip(strides, out_channels):
-            l.append(BasicBlock(self.in_channels, out, 3, stride=stride))
-            self.in_channels = out
-
-        return nn.Sequential(*l)
-
-class DeepLabv3Puls(nn.Module):
-    def __init__(self, class_num):
-        super().__init__()
-        self.backbone = Xception()
-        self.aspp = ASPP(2048, 256, [6, 12, 18])
-        self.reduction = BasicConv(128,48, 1)
-
-        # We find that after concatenating the Conv2 feature
-        # map (before striding) with DeepLabv3 feature map,
-        # it is more effective to employ two 3×3 convolution with 256
-        # filters than using simply one or three convolutions.Changing the
-        # number of filters from 256 to 128 or the kernel size from 3 × 3 to
-        # 1×1 degrades performance.
-        self.conv = nn.Sequential(
-            BasicConv(256 + 48, 256, 3, padding=1),
-            BasicConv(256, 256, 3, padding=1),
-            BasicConv(256, class_num, 1)
-        )
-
-
-
-    def forward(self, x):
-        size = x.size()
-        low_level, x = self.backbone(x)
-        x = self.aspp(x)
-
-        # As shown in Tab. 1, reducing the channels of the
-        # low-level feature map from the encoder module to either
-        # 48 or 32 leads to better performance. We thus adopt
-        # [1 × 1, 48] for channel reduction.
-        low_level = self.reduction(low_level)
-
-        # The encoder features are first bilinearly upsampled by a
-        # factor of 4 and then concatenated with the corresponding low-level
-        # features [73] from the network backbone that have the same spatial
-        # resolution (e.g., Conv2 before striding in ResNet-101 [25]).
-        x = F.interpolate(x, size=low_level.size()[2:], mode='bilinear', align_corners=False)
-        x = torch.cat([x, low_level], dim=1)
-        x = self.conv(x)
-
-        # Note that our proposed DeepLabv3+ model has output stride = 4.
-        # We do not pursue further denser output feature map (i.e.,
-        # output stride < 4) given the limited GPU resources.
-        x = F.interpolate(x, size=size[2:], mode='bilinear', align_corners=False)
-
-        return x
-
-
-class BasicConv(nn.Module):
-    def __init__(self, in_channles, out_channels, kernel_size, **kwargs):
-        super().__init__()
-        self.conv = nn.Conv2d(in_channles, out_channels, kernel_size, **kwargs)
-        self.bn = nn.BatchNorm2d(out_channels)
-        self.relu = nn.ReLU(inplace=True)
-
-    def forward(self, x):
-        x = self.conv(x)
-        x = self.bn(x)
-        x = self.relu(x)
-
-        return x
-
-class ASPPPooling(nn.Module):
-    def __init__(self, in_channles, out_channels):
-        super().__init__()
-        self.aspp_pooling = nn.Sequential(
-            nn.AdaptiveAvgPool2d((1, 1)),
-            BasicConv(in_channles, out_channels, 1)
-        )
-
-    def forward(self, x):
-        """Specifically, we apply global average pooling on the last feature
-        map of the model, feed the resulting image-level features to a 1 × 1
-        convolution with 256 filters (and batch normalization [38]), and then
-        bilinearly upsample the feature to the desired spatial dimension.
-        """
         size = x.shape[-2:]
-        x = self.aspp_pooling(x)
-        x = F.interpolate(x, size=size, mode='bilinear', align_corners=False)
-
-        return x
+        x = super(ASPPPooling, self).forward(x)
+        return F.interpolate(x, size=size, mode='bilinear', align_corners=False)
 
 class ASPP(nn.Module):
-    def __init__(self, in_channles, out_channels, rates):
-        super().__init__()
+    def __init__(self, in_channels, atrous_rates):
+        super(ASPP, self).__init__()
+        out_channels = 256
+        modules = []
+        modules.append(nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)))
 
-        self.aspp_conv1 = BasicConv(in_channles, out_channels, 1)
-        self.aspp_conv2 = BasicConv(in_channles, out_channels, 3, padding=rates[0], dilation=rates[0])
-        self.aspp_conv3 = BasicConv(in_channles, out_channels, 3, padding=rates[1], dilation=rates[1])
-        self.aspp_conv4 = BasicConv(in_channles, out_channels, 3, padding=rates[2], dilation=rates[2])
+        rate1, rate2, rate3 = tuple(atrous_rates)
+        modules.append(ASPPConv(in_channels, out_channels, rate1))
+        modules.append(ASPPConv(in_channels, out_channels, rate2))
+        modules.append(ASPPConv(in_channels, out_channels, rate3))
+        modules.append(ASPPPooling(in_channels, out_channels))
 
-        self.aspp_pooling = ASPPPooling(in_channles, out_channels)
+        self.convs = nn.ModuleList(modules)
+
         self.project = nn.Sequential(
-            BasicConv(5 * out_channels, out_channels, 1),
-            nn.Dropout(0.5)
-        )
+            nn.Conv2d(5 * out_channels, out_channels, 1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.1),)
 
     def forward(self, x):
-        x1 = self.aspp_conv1(x)
-        x2 = self.aspp_conv2(x)
-        x3 = self.aspp_conv3(x)
-        x4 = self.aspp_conv4(x)
-        x5 = self.aspp_pooling(x)
-
-        x = torch.cat([x1, x2, x3, x4, x5], dim=1)
-        x = self.project(x)
-
-        return x
-
-def deeplabv3plus(class_num):
-    return DeepLabv3Puls(class_num)
+        res = []
+        for conv in self.convs:
+            res.append(conv(x))
+        res = torch.cat(res, dim=1)
+        return self.project(res)
 
 
 
-#net = deeplabv3plus(32)
-#img = torch.randn(2, 3, 512, 512)
-#print(net(img).shape)
+def convert_to_separable_conv(module):
+    new_module = module
+    if isinstance(module, nn.Conv2d) and module.kernel_size[0]>1:
+        new_module = AtrousSeparableConvolution(module.in_channels,
+                                      module.out_channels,
+                                      module.kernel_size,
+                                      module.stride,
+                                      module.padding,
+                                      module.dilation,
+                                      module.bias)
+    for name, child in module.named_children():
+        new_module.add_module(name, convert_to_separable_conv(child))
+    return new_module
+
+
+def deeplabv3plus_resnet50(num_classes):
+    import sys
+    import os
+    sys.path.append(os.getcwd())
+    import models.backbones.resnet as resnet
+
+    backbone = resnet.resnet50d(num_classes)
+
+
+    inplanes = 2048
+    low_level_planes = 256
+    aspp_dilate = [12, 24, 36]
+
+    classifier = DeepLabHeadV3Plus(inplanes, low_level_planes, num_classes, aspp_dilate)
+
+    aux_inplanes = 1024
+    aux_classifier = AuxClassifier(aux_inplanes, num_classes)
+    net = DeepLabV3Plus(
+        backbone=backbone,
+        classifier=classifier,
+        aux_classifier=aux_classifier)
+    return net
+
+#net = deeplabv3plus_resnet50(3)
+#
+#img = torch.Tensor(3, 3, 480, 480)
+#
+#output = net(img)
+#print(net)
+#print(output.shape)
