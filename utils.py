@@ -201,9 +201,11 @@ def get_model(model_name, input_channels, class_num, args=None):
         net = SegNet(input_channels, class_num)
 
     elif model_name == 'deeplabv3plus':
-        from models.deeplabv3plus import deeplabv3plus
+        #from models.deeplabv3plus import deeplabv3plus
+        from models.deeplabv3plus import deeplabv3plus_resnet50
         #from models.deeplabv3plus_tmp import deeplab as deeplabv3plus
-        net = deeplabv3plus(class_num)
+        #net = deeplabv3plus(class_num)
+        net = deeplabv3plus_resnet50(class_num)
 
     elif model_name == 'transunet':
         from models.networks.vit_seg_modeling import transunet
@@ -230,6 +232,10 @@ def get_model(model_name, input_channels, class_num, args=None):
 
     elif model_name == 'tg':
         from models.tri_graph import tg
+        net = tg(class_num)
+
+    elif model_name == 'tgt':
+        from models.tri_graph_tmp import tg
         net = tg(class_num)
 
     elif model_name == 'mgl':
@@ -387,8 +393,8 @@ def print_eval(class_names, results):
 
 def pretrain_training_transforms():
 
-    crop_size=(256, 256)
-    #crop_size=(480, 480)
+    #crop_size=(256, 256)
+    crop_size=(480, 480)
     trans = transforms.Compose([
             transforms.ElasticTransform(alpha=10, sigma=3, alpha_affine=20, p=0.5),
             # transforms.RandomRotation(degrees=90, expand=False),
@@ -438,7 +444,7 @@ def pretrain_test_transforms():
             resize_to_multiple=False,
             #min_size=256,
             #min_size=480,
-            min_size=208,
+            min_size=480,
             #min_size=None,
             mean=settings.MEAN,
             std=settings.STD
@@ -1037,6 +1043,7 @@ def on_load_checkpoint(model_state_dict, pretrained_state_dict):
     #state_dict = pretrained.state_dict()
     #model_state_dict = self.state_dict()
     #is_changed = False
+    #print(pretrained_state_dict.keys())
 
     new_state_dict = OrderedDict()
     for model_key in model_state_dict.keys():
@@ -1046,7 +1053,6 @@ def on_load_checkpoint(model_state_dict, pretrained_state_dict):
             pretrain_tensor = pretrained_state_dict[model_key]
             #print(pretrain_tensor.shape)
             if pretrain_tensor.shape != model_tensor.shape:
-                #print(pretrain_tensor.shape, model_tensor.shape)
                 pretrain_tensor.resize_(model_tensor.shape)
 
             #print(pretrain_tensor.shape)
@@ -1054,6 +1060,7 @@ def on_load_checkpoint(model_state_dict, pretrained_state_dict):
         else:
             #print('heelo')
             #print(model_key)
+            print('warning: {} is missing in pretrained checkpoint'.format(model_key))
             new_state_dict[model_key] = model_tensor
 
         #pretrain_tensor = pretrained_state_dict[pretrain_key]
