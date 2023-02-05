@@ -165,12 +165,15 @@ def train(net, train_dataloader, val_loader, writer, args):
                 #loss = loss.mean()
                 #######  two branches
 
-                gland_preds = net(images)
+                gland_preds, aux_preds = net(images)
                 loss = gland_loss_fn_ce(gland_preds, masks) + \
                                 3 * gland_loss_fn_dice(gland_preds, masks)
 
+                aux_loss = gland_loss_fn_ce(aux_preds, masks) + \
+                                3 * gland_loss_fn_dice(aux_preds, masks)
                 #weight_maps = weight_maps.float().div(20)
                 #loss = loss * weight_maps
+                loss = loss + aux_loss
                 loss = loss.mean()
 
             scaler.scale(loss).backward()
@@ -243,7 +246,7 @@ def train(net, train_dataloader, val_loader, writer, args):
 
             net.eval()
             print('evaluating.........')
-            acc, iou, recall, precision, F1, performance = evaluate(net, val_loader, args)
+            acc, iou, recall, precision, F1, performance, total, testA, testB = evaluate(net, val_loader, args)
             print(
                 'acc: {:.04f}'.format(acc),
                 'iou: {:.04f}'.format(iou),
@@ -251,6 +254,11 @@ def train(net, train_dataloader, val_loader, writer, args):
                 'precision: {:.04f}'.format(precision),
                 'F1: {:.04f}'.format(F1),
                 'performance: {:.04f}'.format(performance),
+                #'total:', total,
+                'total_F1:{:.4f}, total_dice:{:.4f}, total_haus:{:.4f}'.format(*total),
+                'testA_F1:{:.4f}, testA_dice:{:.4f}, testA_haus:{:.4f}'.format(*testA),
+                'testB_F1:{:.4f}, testB_dice:{:.4f}, testB_haus:{:.4f}'.format(*testB),
+                #'testB', testB
             )
 
             #print('total: F1 {}, Dice:{}, Haus:{}'.format(*total))
@@ -518,9 +526,9 @@ def evaluate(net, val_dataloader, args):
                 #print(t3 - t2)
                 #pred = cv2.imread('/data/hdd1/by/FullNet-varCE/tmp/testA_39_pred.png', -1)
                 #print(pred.shape)
-                #_, _, F1, dice, _, haus = gland_accuracy_object_level(pred, gt_seg_map)
                 #metrics_inside += compute_pixel_level_metrics(pred, gt_seg_map)
                 metrics_inside += accuracy_pixel_level(pred, gt_seg_map)
+                _, _, F1, dice, _, haus = gland_accuracy_object_level(pred, gt_seg_map)
                 #print(img_name, F1, dice, haus)
                 t4 = time.time()
                 #if 'testA_39' in img_name:
@@ -534,25 +542,25 @@ def evaluate(net, val_dataloader, args):
                 #if count > 10:
                     #import sys; sys.exit()
 
-                #res = np.array([F1, dice, haus])
+                res = np.array([F1, dice, haus])
 
 
-                #if 'testA' in img_name:
-                #    count_A += 1
-                #    testA += res
+                if 'testA' in img_name:
+                    count_A += 1
+                    testA += res
 
-                #if 'testB' in img_name:
-                #    count_B += 1
-                #    testB += res
+                if 'testB' in img_name:
+                    count_B += 1
+                    testB += res
 
-    #total = (testA + testB) / (count_A + count_B)
+    total = (testA + testB) / (count_A + count_B)
 
-    #testA = testA / count_A
-    #testB = testB / count_B
+    testA = testA / count_A
+    testB = testB / count_B
     metrics_inside = metrics_inside / count
 
     acc, iou, recall, precision, F1, performance = metrics_inside
-    return acc, iou, recall, precision, F1, performance
+    return acc, iou, recall, precision, F1, performance, total, testA, testB
 
 
     #return total, testA, testB
