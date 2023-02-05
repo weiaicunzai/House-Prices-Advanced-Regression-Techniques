@@ -5,6 +5,7 @@ import glob
 import re
 
 import cv2
+import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 from torchvision.datasets.utils import download_url
@@ -15,10 +16,13 @@ class Glas(Dataset):
         url = 'https://warwick.ac.uk/fac/sci/dcs/research/tia/glascontest/download/warwick_qu_dataset_released_2016_07_08.zip'
         file_name = 'warwick_qu_dataset_released_2016_07_08.zip'
         md5 = '495b2a9f3d694545fbec06673fb3f40f'
+        self.weight_map_path = '/data/hdd1/by/FullNet-varCE/data/GlaS/weight_maps/train'
+        self.weight_map_path_val = '/data/hdd1/by/FullNet-varCE/data/GlaS/weight_maps/val'
 
         if download:
             download_url(url, path, file_name, md5=md5)
 
+        #self.class_names = ['background', 'gland']
         self.class_names = ['background', 'gland', 'cnt']
         # self.ignore_index = -100
         self.ignore_index = 255
@@ -35,6 +39,7 @@ class Glas(Dataset):
 
         self.images = []
         self.labels = []
+        self.weight_maps = []
         search_path = os.path.join(data_folder, '**', '*.bmp')
         #image_re = re.escape(image_set + '_[0-9]+\.bmp')
         #image_re = image_set + '_[0-9]+\.bmp'
@@ -42,12 +47,15 @@ class Glas(Dataset):
         if image_set not in ['train', 'testA', 'testB', 'val']:
             raise ValueError('wrong image_set argument')
         label_re = image_set + '_[0-9]+_' + 'anno' + '\.bmp'
+        #label_re =  'anno' + '\.bmp'
         if image_set == 'val':
             label_re = 'test[A|B]' +  '_[0-9]+_' + 'anno' + '\.bmp'
+        self.image_set = image_set
 
         self.image_names = []
         for bmp in glob.iglob(search_path, recursive=True):
             if re.search(label_re, bmp):
+                #print(bmp)
                 self.labels.append(
                     self.construct_contour(cv2.imread(bmp, -1)))
                 bmp = bmp.replace('_anno', '')
@@ -55,30 +63,41 @@ class Glas(Dataset):
             #elif re.search(image_re, bmp):
                 self.images.append(cv2.imread(bmp, -1))
 
+                if self.image_set == 'train':
+                    bs_name = os.path.basename(bmp)
+                    bs_name = bs_name.replace('.bmp', '_anno_weight.png')
+                    #if 'train' in bs_name:
+                    weight_map_filename = os.path.join(
+                            self.weight_map_path, bs_name)
+                    #else:
+                    #    weight_map_filename = os.path.join(
+                    #        self.weight_map_path_val, bs_name)
+
+                    #print(bmp, weight_map_filename)
+                    self.weight_maps.append(
+                        cv2.imread(weight_map_filename, -1)
+                    )
+
         assert len(self.images) == len(self.labels)
         self.transforms = transforms
         self.mean = (0.7851387990848604, 0.5111793462233759, 0.787433705481764)
         self.std = (0.13057256006459803, 0.24522816688399154, 0.16553457394913107)
-        self.image_set = image_set
-
         self.times = 30000
 
-
     def construct_contour(self, label):
-        kernel = np.ones((3, 3), np.uint8)
-        #label_tmp = label.copy()
-        label[label > 0] = 1
-        #print(np.unique(label))
-        label_tmp = label.copy()
-        label = cv2.erode(label, kernel, iterations=4)
-        #print(np.unique(label))
-        label_tmp[label_tmp > 0] = 1
-        cnt = label_tmp - label
-        #print(np.unique(cnt))
-        label[cnt == 1] = 2
+        if self.image_set == 'train':
+            kernel = np.ones((3, 3), np.uint8)
+            label[label > 0] = 1
+            label_tmp = label.copy()
+            label = cv2.erode(label, kernel, iterations=4)
+            label_tmp[label_tmp > 0] = 1
+            cnt = label_tmp - label
+            label[cnt == 1] = 2
 
-        #return cnt
-        return label
+            return label
+        else:
+            label[label > 0] = 1
+            return label
 
     def __len__(self):
         if self.image_set == 'train':
@@ -91,6 +110,7 @@ class Glas(Dataset):
         if self.image_set == 'train':
             index = index % len(self.images)
 
+        #print(len(self))
         image = self.images[index]
         label = self.labels[index]
         #print(np.unique(label))
@@ -105,8 +125,13 @@ class Glas(Dataset):
 
         else:
             if self.transforms is not None:
-                image, label = self.transforms(image, label)
-            return image, label
+                weight_map = self.weight_maps[index]
+                #print(self.transforms)
+                image, label, weight_map = self.transforms(image, label, weight_map)
+                #h, w = label.shape
+                #weight_map = cv2.resize()
+                #weight_map = torch.from_numpy(weight_map)
+            return image, label, weight_map
 
 
 
