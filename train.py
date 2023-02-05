@@ -4,6 +4,7 @@ import time
 import re
 import sys
 sys.path.append(os.getcwd())
+import skimage.morphology as morph
 
 from tqdm import tqdm
 import torch
@@ -14,7 +15,7 @@ import numpy as np
 from torch.cuda.amp import GradScaler
 from torch.cuda.amp import autocast
 # from torch.optim.lr_scheduler import PolynomialLR
-#print(torch.cuda.amp.__file__)
+import cv2
 
 import transforms
 import utils
@@ -24,7 +25,7 @@ from dataset.voc2012 import VOC2012Aug
 #from dataset.camvid_lmdb import CamVid
 from lr_scheduler import PolynomialLR, WarmUpLR, WarmUpWrapper
 from metric import eval_metrics, gland_accuracy_object_level
-from loss import SegmentLevelLoss
+from loss import SegmentLevelLoss, LossVariance
 from dataloader import IterLoader
 import test_aug
 from losses import DiceLoss, WeightedLossWarpper
@@ -61,18 +62,29 @@ def train(net, train_dataloader, val_loader, writer, args):
     lr_schduler = WarmUpWrapper(warmuplr_scheduler=warmup_scheduler, lr_scheduler=train_scheduler)
 
 
-    loss_fn_ce = nn.CrossEntropyLoss(ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
-    loss_fn_dice = DiceLoss(ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
-    loss_l2 = nn.MSELoss()
-    loss_seg = SegmentLevelLoss(op=args.op)
+    gland_loss_fn_ce = nn.CrossEntropyLoss(ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
+    gland_loss_fn_dice = DiceLoss(ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
+
+    #cnt_weight = torch.tensor([0.52756701, 9.568812]).cuda()
+    cnt_weight = None
+    cnt_loss_fn_ce = nn.CrossEntropyLoss(weight=cnt_weight, ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
+    cnt_loss_fn_dice = DiceLoss(class_weight=cnt_weight, ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
+    var_loss_fn = LossVariance()
+
+    #loss_l2 = nn.MSELoss()
+    #loss_seg = SegmentLevelLoss(op=args.op)
     sampler = _sampler.OHEMPixelSampler(ignore_index=train_dataloader.dataset.ignore_index)
-    loss_fn_ce = WeightedLossWarpper(loss_fn_ce, sampler)
-    loss_fn_dice = WeightedLossWarpper(loss_fn_dice, sampler)
+    #cnt_loss_fn_ce = WeightedLossWarpper(cnt_loss_fn_ce, sampler)
+    #cnt_loss_fn_dice = WeightedLossWarpper(cnt_loss_fn_dice, sampler)
+    gland_loss_fn_ce = WeightedLossWarpper(gland_loss_fn_ce, sampler)
+    gland_loss_fn_dice = WeightedLossWarpper(gland_loss_fn_dice, sampler)
+    #loss_fn_ce = WeightedLossWarpper(loss_fn_ce, sampler)
+    #loss_fn_dice = WeightedLossWarpper(loss_fn_dice, sampler)
 
 
     #batch_start = time.time()
     # train_start = time.time()
-    total_load_time = 0
+    #total_load_time = 0
     train_iterloader = IterLoader(train_dataloader)
     #for batch_idx, (images, masks) in enumerate(train_loader):
     net.train()
@@ -110,7 +122,7 @@ def train(net, train_dataloader, val_loader, writer, args):
     #) as p:
     #images, masks = next(train_iterloader)
     train_t = time.time()
-    for iter_idx, (images, masks) in enumerate(train_iterloader):
+    for iter_idx, (images, masks, weight_maps) in enumerate(train_iterloader):
         # images, masks = images, masks
 
     # for iter_idx in range(1000000):
@@ -130,27 +142,45 @@ def train(net, train_dataloader, val_loader, writer, args):
 
         if args.gpu:
             images = images.cuda()
+            weight_maps = weight_maps.cuda()
             masks = masks.cuda()
-            #if masks is not None:
-            #else:
-            #    print(1111)
-            #masks = images
 
         optimizer.zero_grad()
-        # print(torch.unique(masks))
         if args.fp16:
             with autocast():
-                preds = net(images)
-                # print(preds.dtype)
-                # print(preds.shape, masks.shape)
-                #seg_weight = sampler.sample(preds, masks.unsqueeze(1))
-                loss_ce = loss_fn_ce(preds, masks)
-                #loss_ce = loss_ce * seg_weight
-                #loss_ce = loss_ce.mean()
-                loss_dice = loss_fn_dice(preds, masks)
-                #loss_dice = loss_dice * seg_weight
-                #loss_dice = loss_dice.mean()
-                loss = 3 * loss_dice + loss_ce
+
+                #######  two branches
+                #gland_preds, cnt_preds = net(images)
+                #gland_masks = torch.zeros(size=masks.shape, device=images.device, dtype=masks.dtype)
+                #cnt_masks = torch.zeros(size=masks.shape, device=images.device, dtype=masks.dtype)
+                #gland_masks[masks==1] = 1
+                #gland_masks[masks==255] = 255 # ignore_idx
+                #cnt_masks[masks==2] = 1
+                #cnt_masks[masks==255] = 255 # ignore _idx
+                #loss_gland = gland_loss_fn_ce(gland_preds, gland_masks) + \
+                #                3 * gland_loss_fn_dice(gland_preds, gland_masks)
+                #loss_cnt = cnt_loss_fn_ce(cnt_preds, cnt_masks) + \
+                #                3 * cnt_loss_fn_dice(cnt_preds, cnt_masks)
+                #loss = loss_gland + loss_cnt
+                #loss = loss.mean()
+                #######  two branches
+
+                gland_preds, aux_preds = net(images)
+
+                #var_loss = var_loss_fn(gland_preds, masks)
+                loss = gland_loss_fn_ce(gland_preds, masks) + \
+                                3 * gland_loss_fn_dice(gland_preds, masks)
+
+                loss_aux = gland_loss_fn_ce(aux_preds, masks) + \
+                                3 * gland_loss_fn_dice(aux_preds, masks)
+
+                weight_maps = weight_maps.float().div(20)
+                #print(weight_maps.max(),  weight_maps.min())
+                #print(loss.shape, weight_maps.shape)
+                #print(weight_maps.mean())
+                loss = loss * weight_maps + 0.4 * loss_aux * weight_maps
+                loss = loss.mean()
+
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
@@ -164,6 +194,13 @@ def train(net, train_dataloader, val_loader, writer, args):
             loss.backward()
             optimizer.step()
 
+        #if iter_idx == 2000:
+        #    torch.save(net.state_dict(), '2000.pth')
+        #    torch.save(images, 'images.pt')
+        #    torch.save(masks, 'masks.pt')
+        #    torch.save(cnt_masks, 'cnt_masks.pt')
+        #    torch.save(gland_masks, 'gland_masks.pt')
+        #    import sys; sys.exit()
         #if args.poly:
             #train_scheduler.step()
         #p.step()
@@ -185,7 +222,7 @@ def train(net, train_dataloader, val_loader, writer, args):
 
         if (iter_idx + 1) % 50 == 0:
             print(('Training Iter: [{iter}/{total_iter}] '
-                    'Lr:{lr:0.8f} Loss:{loss:0.4f}, Iter time:{iter_time:0.4f}s Data loading time:{data_time:0.4f}s').format(
+                    'Lr:{lr:0.6f} Loss:{loss:0.4f}, Iter time:{iter_time:0.4f}s Data loading time:{data_time:0.4f}s').format(
                 loss=loss.item(),
                 iter=(iter_idx+1),
                 total_iter = total_iter,
@@ -381,30 +418,131 @@ def evaluate(net, val_dataloader, args):
     valid_dataset = val_dataloader.dataset
     #cls_names = valid_dataset.class_names
     #ig_idx = valid_dataset.ignore_index
+    count = 0
+    #sampler = _sampler.OHEMPixelSampler(ignore_index=val_dataloader.dataset.ignore_index, min_kept=10000)
     with torch.no_grad():
         for img_metas in tqdm(val_dataloader):
             for img_meta in img_metas:
+
 
                 imgs = img_meta['imgs']
                 gt_seg_map = img_meta['seg_map']
                 ori_shape = gt_seg_map.shape[:2]
 
-                pred = test_aug.aug_test(
+
+                pred, seg_logit = test_aug.aug_test(
                     imgs=imgs,
                     flip_direction=img_meta['flip'],
                     ori_shape=ori_shape,
                     model=net,
-                    crop_size=(480, 480),
-                    stride=(256, 256),
-                    mode='slide',
+                    #crop_size=(480, 480),
+                    #stride=(256, 256),
+                    crop_size=None,
+                    stride=None,
+                    #mode='slide',
+                    #rescale=True,
+                    rescale=False,
+                    mode='whole',
                     num_classes=valid_dataset.class_num
                 )
 
+                #pred[pred > 1] = 0
+                pred = pred == 1
+                #pred = morph.remove_small_objects(pred, 100) # 0.84097868
+                #pred = morph.remove_small_objects(pred, 100 * 2) # 0.85248084
+                #pred = morph.remove_small_objects(pred, 100 * 2 * 2) # 0.8694393423149404
+                #pred = morph.remove_small_objects(pred, 100 * 5) # 0.87442937
+                #pred = morph.remove_small_objects(pred, 100 * 6) # 0.8763693
+                #pred = morph.remove_small_objects(pred, 100 * 7) # 0.87812435
+                #pred = morph.remove_small_objects(pred, 100 * 8) # 0.88134712
+                #pred = morph.remove_small_objects(pred, 100 * 9) # 0.88131605
+                pred = morph.remove_small_objects(pred, 100 * 8 + 50) # 0.88219517
+                # pred = morph.remove_small_objects(pred, 100 * 8 + 50) # 0.88219517
+                #                                                         0.88228165
+
+                # multi scale
+                #pred = morph.remove_small_objects(pred, 100 * 8 + 50) #  0.87709376
+                #pred = morph.remove_small_objects(pred, 100 * 7) # 0.87236826
+                #pred = morph.remove_small_objects(pred, 100 * 9) # 0.87694807
+
                 pred[pred > 1] = 0
 
-                img_name = img_meta['img_name']
 
+                #print(pred.shape, np.unique(pred))
+                h, w = gt_seg_map.shape
+                pred = cv2.resize(pred.astype('uint8'), (w, h), interpolation=cv2.INTER_NEAREST)
+
+                img_name = img_meta['img_name']
+                #print(img_name)
+
+#0.88351788
+#0.88308627
+                #if 'testA_39' in img_name:
+                #    #print(img_name)
+                #    assert len(imgs) == 1
+                #    #torch.save(imgs[0], 'tmp/testA_39_input.pt')
+                #    #torch.save(seg_logit, 'tmp/testA_39_output.pt')
+                #    cv2.imwrite('{}_fff.png'.format('testA_39'), pred)
+                #    import sys; sys.exit()
+                #print(torch.unique(gt_seg_map))
+
+                #gland = seg_logit[:, :2, :, :]
+                #cnt = seg_logit[:, 2:, :, :]
+                #gt_seg_map[gt_seg_map == 2] = 1
+                #cnt_map = gt_seg_map == 2
+                #cnt_map = cnt_map.unsqueeze(0)
+                #cnt_map = cnt_map.unsqueeze(0)
+                #seg_weight = sampler.sample(cnt, cnt_map.long())
+                #print(seg_weight.shape)
+
+                #print(pred.shape, gt_seg_map.shape)
+                #count += 1
+                #print(np.unique(pred))
+                #print(torch.unique(gt_seg_map))
+                #gt_seg_map[gt_seg_map == 2] = 1
+                #import skimage.morphology as morph
+                #pred = morph.label(pred, connectivity=2)
+                #pred = morph.remove_small_objects(pred, 100)
+                #pred[pred!=0] = 1
+                #cv2.imwrite('tmp/test{}.jpg'.format(count), pred * 255)
+                #cv2.imwrite('tmp/test{}_mask.jpg'.format(count), gt_seg_map.numpy() * 255)
+                #gland = seg_logit[:, :2, :, :]
+                #cnt = seg_logit[:, 2:, :, :]
+                #r = cv2.imwrite('tmp/test{}_gland.jpg'.format(count), gland[0, 1, :, :].numpy() * 255)
+                #j = cv2.imwrite('tmp/test{}_cnt.jpg'.format(count), cnt[0, 1, :, :].numpy() * 255)
+                #count += 1
+                #cv2.imwrite('tmp/test{}_sampler.jpg'.format(count), seg_weight[0].numpy() * 255)
+
+                #pred =
+                #print(pred.shape,  gt_seg_map.shape)
+                #print(np.unique(pred))
+                #import sys; sys.exit()
+
+
+
+                #t3 = time.time()
+                #print(t3 - t2)
+                #pred = cv2.imread('/data/hdd1/by/FullNet-varCE/tmp/testA_39_pred.png', -1)
+                #print(pred.shape)
+                #cv2.imwrite('test11.png', pred * 255)
+                #cv2.imwrite('test22.png', gt_seg_map * 255)
                 _, _, F1, dice, _, haus = gland_accuracy_object_level(pred, gt_seg_map)
+                #print(F1, dice, haus)
+                #t4 = time.time()
+                #import sys; sys.exit()
+                #print(count, F1, dice, haus)
+                #if 'testA_39' in img_name:
+                    #print(F1, dice, haus)
+                    #import sys; sys.exit()
+                #print(img_name, F1, dice, haus)
+                #print(F1, dice, haus)
+                #print(t4 - t3, 'gland_acc time')
+                #import sys; sys.exit()
+                #print()
+                #print(count, F1, dice, haus)
+
+                #if count > 10:
+                    #import sys; sys.exit()
 
                 res = np.array([F1, dice, haus])
 
@@ -570,6 +708,8 @@ if __name__ == '__main__':
     val_loader = utils.data_loader(args, 'val')
 
     net = utils.get_model(args.net, 3, train_dataset.class_num, args=args)
+    #net.load_state_dict(torch.load('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Monday_16_January_2023_05h_11m_49s/iter_39999.pt'))
+
 
     if args.resume:
         weight_path = utils.get_weight_path(
@@ -578,11 +718,55 @@ if __name__ == '__main__':
         net.load_state_dict(torch.load(weight_path))
         print('Done loading!')
 
+    #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Monday_16_January_2023_05h_11m_49s/iter_39999.pt'))
+    # test_pretrain_crag_glas_rings_prostate
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Tuesday_24_January_2023_01h_28m_51s/iter_39999.pt'
+
+    # test_pretrain_crag_glas_rings_prostate_with_upsampling
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Tuesday_24_January_2023_01h_24m_58s/iter_39999.pt'
+
+    # test_pretrain_crag_glas_rings_with_upsampling
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Sunday_22_January_2023_18h_25m_35s/iter_39999.pt'
+
+    # test_pretrain_crag_glas_rings
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Sunday_22_January_2023_11h_37m_21s/iter_39999.pt'
+
+    # test_pretrain_glas_crag
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Saturday_21_January_2023_06h_37m_14s/iter_39999.pt'
+
+    # test_pretrain_glas
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Sunday_22_January_2023_03h_06m_13s/iter_39999.pt'
+
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/epoch_200.pth'
+
+    # glas+crag+densecl
+    #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_densecl/latest.pth'
+
+    # glas+crag+densecl
+    #ckpt_path = '/data/hdd1/by/mmselfsup//latest.pth'
+
+    # glas+densecl
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/work_dir_glas/latest.pth'
+
+    # glas+crag+rings+densecl
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/work_dir_glas_crag_sings/latest.pth'
+
+    # glas+crag+sin+densecl
+    ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin/latest.pth'
+    print('Loading pretrained checkpoint from {}'.format(ckpt_path))
+    new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path)['state_dict'])
+    #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path))
+    net.load_state_dict(new_state_dict)
+    print('Done!')
+    #import sys; sys.exit()
+
     if args.gpu:
         net = net.cuda()
 
     tensor = torch.Tensor(1, 3, 480, 480)
-    utils.visualize_network(writer, net, tensor)
+    net.eval()
+    #utils.visualize_network(writer, net, tensor)
+    net.train()
 
     train(net, train_loader, val_loader, writer, args)
     # evaluate(net, val_loader, writer, args)
