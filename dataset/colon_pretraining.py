@@ -18,7 +18,15 @@ from conf import settings
 class PreTraining(Dataset):
     def __init__(self, image_set, transforms=None):
 
-        imgs, seg_maps = self.get_data_pair()
+        if image_set == 'train':
+            imgs, seg_maps = self.get_data_pair()
+        else:
+            imgs, seg_maps = self.get_glas_val()
+
+        #print(imgs)
+        #for i in imgs:
+            #print(i)
+
         self.imgs = imgs
         #print(self.imgs[:10])
         #for i in self.imgs[:10]:
@@ -94,21 +102,21 @@ class PreTraining(Dataset):
         self.std = (0.13057256006459803, 0.24522816688399154, 0.16553457394913107)
 
             #self.imgs = self.imgs[::10]
-        imgs = []
-        seg_maps = []
-        for idx in range(len(self.imgs)):
-            if self.image_set == 'train':
-                if idx % 30 != 0:
-                    imgs.append(self.imgs[idx])
-                    seg_maps.append(self.seg_maps[idx])
-            else:
-                if idx % 30 == 0:
-                    imgs.append(self.imgs[idx])
-                    seg_maps.append(self.seg_maps[idx])
+        #imgs = []
+        #seg_maps = []
+        #for idx in range(len(self.imgs)):
+        #    if self.image_set == 'train':
+        #        if idx % 30 != 0:
+        #            imgs.append(self.imgs[idx])
+        #            seg_maps.append(self.seg_maps[idx])
+        #    else:
+        #        if idx % 30 == 0:
+        #            imgs.append(self.imgs[idx])
+        #            seg_maps.append(self.seg_maps[idx])
 
 
-        self.imgs = imgs
-        self.seg_maps = seg_maps
+        #self.imgs = imgs
+        #self.seg_maps = seg_maps
 
             #for idx, img in enumerate(self.imgs):
                 #if idx % 10 != 0:
@@ -120,36 +128,89 @@ class PreTraining(Dataset):
         #self.times = 30000
         #import sys; sys.exit()
 
+    def over_sampling(self, img, seg_map, over_samples):
+        num_imgs = len(img)
+        imgs = []
+        seg_maps = []
+        assert num_imgs < over_samples
+        for i in range(int(over_samples / num_imgs)):
+            imgs.extend(img)
+            seg_maps.extend(seg_map)
+        return imgs, seg_maps
+
     def get_data_pair(self):
         imgs = []
         seg_maps = []
 
         img, seg_map = self.get_prostate_sin()
+        num_imgs_prostate_sin = len(img)
         imgs.extend(img)
         seg_maps.extend(seg_map)
 
         img, seg_map = self.get_prostate_rings()
+        #num_imgs_rings = len(img)
+        #img, seg_map = self.over_sampling(img, seg_map, num_imgs_prostate_sin)
         imgs.extend(img)
         seg_maps.extend(seg_map)
+        #print(len(imgs))
 
         img, seg_map = self.get_glas()
+        num_imgs_glas = len(img)
+        #img, seg_map = self.over_sampling(img, seg_map, num_imgs_rings)
+        #print(len(img))
+        #img, seg_map = self.over_sampling(img, seg_map, num_imgs_prostate_sin)
+        #print(len(img))
         imgs.extend(img)
         seg_maps.extend(seg_map)
 
-        #img, seg_map = self.get_crag()
-        #imgs.extend(img)
-        #seg_maps.extend(seg_map)
+        img, seg_map = self.get_crag()
+        print(len(img))
+        #img, seg_map = self.over_sampling(img, seg_map, num_imgs_rings)
+        #img, seg_map = self.over_sampling(img, seg_map, num_imgs_prostate_sin)
+        #print(len(img))
+        print(len(img))
+        #import sys; sys.exit()
+        imgs.extend(img)
+        seg_maps.extend(seg_map)
 
         return imgs, seg_maps
 
     def get_crag(self):
         path = '/data/hdd1/by/datasets/original/CRAG/train'
+        path = '/data/hdd1/by/datasets/original/CRAGV2/CRAG/train'
+
         imgs = []
         seg_maps = []
         for img in glob.iglob(os.path.join(path, 'Images',  '**', '*.png'), recursive=True):
             #print(img)
             imgs.append(img)
             seg_map = img.replace('Images', 'Annotation')
+            #print(seg_map)
+            seg_maps.append(seg_map)
+
+        return imgs, seg_maps
+
+    def get_glas_val(self):
+        path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)'
+        imgs = []
+        seg_maps = []
+        #count = 0
+        for img in glob.iglob(os.path.join(path, '**', '*.bmp'), recursive=True):
+            if '_anno.bmp' in img:
+                continue
+
+            if 'train' in img:
+                continue
+
+            #count += 1
+            #if  count > 10:
+            #    break
+            imgs.append(img)
+            seg_map = img.replace(
+                '.bmp',
+                '_anno.bmp'
+            )
+            #print(img)
             #print(seg_map)
             seg_maps.append(seg_map)
 
@@ -267,13 +328,20 @@ class PreTraining(Dataset):
 #)
 #
 #print(len(dataset))
+#
+##dataset[]
+##for i in range(100):
+#import random
+#for i in range(100):
+#    #dataset[i]
+#    random.choice(dataset)
 
 
 #count = 0
 #for img, label in dataset:
-#    count += 1
-#    if count % 100 ==0:
-#        print(count)
-#
-#    assert img.shape[:2] == label.shape[:2]
+    #count += 1
+    #if count % 100 ==0:
+        #print(count)
+
+    #assert img.shape[:2] == label.shape[:2]
 #    pass
