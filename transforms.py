@@ -47,7 +47,6 @@ class Compose:
 
         if weight_map is not None:
             return img, mask, weight_map
-                iprint(trans, img.shape, mask.shape, weight_map.shape)
         else:
             return img, mask
 
