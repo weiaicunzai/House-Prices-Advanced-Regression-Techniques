@@ -262,8 +262,8 @@ class GraphHead(nn.Module):
         self.gcu_32 = GCU(node_num=32, dim=dim)
 
         self.project = BasicConv2d(
-            in_channels=1024,
-            out_channels=256,
+            in_channels=dim * 4,
+            out_channels=dim,
             kernel_size=1
         )
 
@@ -301,6 +301,8 @@ class TG(nn.Module):
     def __init__(self, backbone, num_classes):
         super().__init__()
         self.backbone = backbone
+        #self.graph_head_dim = 512
+        self.graph_head_dim = 256
 
         self.project = nn.Sequential(
             nn.Conv2d(256, 48, 1, bias=False),
@@ -310,7 +312,7 @@ class TG(nn.Module):
 
         self.classifier = nn.Sequential(
             #nn.Conv2d(512 + 48, 256, 3, padding=1, bias=False),
-            nn.Conv2d(256 + 48, 256, 3, padding=1, bias=False),
+            nn.Conv2d(self.graph_head_dim + 48, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
             nn.Conv2d(256, num_classes, 1)
@@ -333,11 +335,11 @@ class TG(nn.Module):
             BasicConv2d(
                 in_channels=2048,
                 #out_channels=512,
-                out_channels=256,
+                out_channels=self.graph_head_dim,
                 kernel_size=1
             ),
             #GraphHead(node_num=16, dim=512)
-            GraphHead(dim=256)
+            GraphHead(dim=self.graph_head_dim)
             #GraphHead(dim=111)
         #    #BasicConv2d(512, num_classes, 1)
         )
