@@ -65,8 +65,10 @@ def segment_level_loss(gt, pred, op='or'):
     if op == 'none':
         return np.zeros(gt.shape, dtype=np.uint8)
 
-    pred = morph.remove_small_objects(pred == 1, 100)
-    gt = morph.remove_small_objects(gt == 1, 3)
+    #pred = morph.remove_small_objects(pred == 1, 100)
+    #gt = morph.remove_small_objects(gt == 1, 3)
+    pred = morph.remove_small_objects(pred == 1, 1)
+    gt = morph.remove_small_objects(gt == 1, 1)
     #diff = np.bitwise_xor(pred, pred2)
     #pred = pred2
     #cv2.imwrite('diff.png', diff / diff.max() * 255)
