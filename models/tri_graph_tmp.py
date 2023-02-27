@@ -318,6 +318,10 @@ class TG(nn.Module):
             nn.Conv2d(256, num_classes, 1)
         )
 
+        #self.queue = nn.Parameter(num_classes, 5000, 256)
+        self.register_buffer("queue", torch.randn(num_classes, 5000, 256))
+        self.queue = nn.functional.normalize(self.queue, p=2, dim=2)
+
         #self.head = FCNHead()
         #self.cls_head = UpSample2d(
         #    320,
