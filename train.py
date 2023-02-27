@@ -25,7 +25,7 @@ from dataset.voc2012 import VOC2012Aug
 #from dataset.camvid_lmdb import CamVid
 from lr_scheduler import PolynomialLR, WarmUpLR, WarmUpWrapper
 from metric import eval_metrics, gland_accuracy_object_level
-from loss import SegmentLevelLoss, LossVariance
+#from loss import SegmentLevelLoss, LossVariance
 from dataloader import IterLoader
 import test_aug
 from losses import DiceLoss, WeightedLossWarpper
@@ -69,7 +69,7 @@ def train(net, train_dataloader, val_loader, writer, args):
     cnt_weight = None
     cnt_loss_fn_ce = nn.CrossEntropyLoss(weight=cnt_weight, ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
     cnt_loss_fn_dice = DiceLoss(class_weight=cnt_weight, ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
-    var_loss_fn = LossVariance()
+    #var_loss_fn = LossVariance()
 
     #loss_l2 = nn.MSELoss()
     #loss_seg = SegmentLevelLoss(op=args.op)
@@ -683,6 +683,7 @@ if __name__ == '__main__':
     parser.add_argument('-fp16', action='store_true', default=False, help='whether to use mixed precision training')
     parser.add_argument('-scale', type=float, default=1, help='min_lr for poly')
     args = parser.parse_args()
+    print(args)
 
     root_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -742,6 +743,9 @@ if __name__ == '__main__':
     # glas+crag+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_densecl/latest.pth'
 
+    # glas + crag + lizard + sin + densecl
+    #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_lizard_sin/latest.pth'
+
     # glas+crag+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup//latest.pth'
 
@@ -751,8 +755,19 @@ if __name__ == '__main__':
     # glas+crag+rings+densecl
     #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/work_dir_glas_crag_sings/latest.pth'
 
+    # glas+crag+rings+sins_densecl
+    #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin_rings_densecl/latest.pth'
+
+    # glas+crag+rings+sins+crc+lizard_densecl
+    #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin_lizard_crc/latest.pth'
+
+    # glas+crag+_mocov2
+    ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_mocov2_bs64/latest.pth'
+
+    # glas+crag+rings+densecl
+    #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin_rings_densecl/latest.pth'
     # glas+crag+sin+densecl
-    ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin/latest.pth'
+    #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin/latest.pth'
     print('Loading pretrained checkpoint from {}'.format(ckpt_path))
     new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path)['state_dict'])
     #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path))
