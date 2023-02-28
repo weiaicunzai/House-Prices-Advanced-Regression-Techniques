@@ -434,7 +434,6 @@ class GlandContrastLoss(nn.Module):
 
 
         queue_feat = queue.view(-1, dim) ###########################################
-        #print(queue_feat.shape)
 
         labels = labels.contiguous().view(-1, 1)
         #print(labels.shape, queue_y.shape) [12, 1] * [10000, 1]
