@@ -764,7 +764,7 @@ if __name__ == '__main__':
     # glas+crag+_mocov2
     # ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_mocov2_bs64/latest.pth'
     # glas + crag + rings + sin + lizard + crc
-    ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_rings_sin_lizard_crc/latest.pth'
+    ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_rings_lizard_sin_crc_mocov2/latest.pth'
 
     # glas+crag+rings+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin_rings_densecl/latest.pth'
