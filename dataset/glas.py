@@ -16,8 +16,10 @@ class Glas(Dataset):
         url = 'https://warwick.ac.uk/fac/sci/dcs/research/tia/glascontest/download/warwick_qu_dataset_released_2016_07_08.zip'
         file_name = 'warwick_qu_dataset_released_2016_07_08.zip'
         md5 = '495b2a9f3d694545fbec06673fb3f40f'
-        self.weight_map_path = '/data/hdd1/by/FullNet-varCE/data/GlaS/weight_maps/train'
-        self.weight_map_path_val = '/data/hdd1/by/FullNet-varCE/data/GlaS/weight_maps/val'
+        #self.weight_map_path = '/data/hdd1/by/FullNet-varCE/data/GlaS/weight_maps/train'
+        #self.weight_map_path_val = '/data/hdd1/by/FullNet-varCE/data/GlaS/weight_maps/val'
+        self.weight_map_path = os.path.join(path, 'weight_maps', 'train')
+        self.weight_map_path_val = os.path.join(path, 'weight_maps', 'val')
 
         if download:
             download_url(url, path, file_name, md5=md5)
