@@ -433,12 +433,12 @@ class GlandContrastLoss(nn.Module):
         ], dim=0).view(-1, 1)
 
 
-        queue_feat = queue.view(-1, dim).cuda() ###########################################
-        print(queue_feat.shape)
+        queue_feat = queue.view(-1, dim) ###########################################
+        #print(queue_feat.shape)
 
         labels = labels.contiguous().view(-1, 1)
         #print(labels.shape, queue_y.shape) [12, 1] * [10000, 1]
-        mask = torch.eq(labels, queue_y.T).float().cuda()
+        mask = torch.eq(labels, queue_y.T).float()
 
 
         #x_feat = x_feat.view(batch_size * num_samples, dim)
@@ -510,8 +510,35 @@ class GlandContrastLoss(nn.Module):
         #print(anchor_feats.shape, 'c')
         #pos = anchor_feats
 
+    def _dequeue_and_enqueue(self, gland_feats, bg_feats, queue, queue_ptr):
+        batch_size, num_samples, dim = gland_feats.shape
+        num_classes, q_len, dim = queue.shape
 
-    def forward(self, pred_logits, gt_seg, queue):
+        ptr = queue_ptr[0].long().item()
+
+        feats = torch.stack(
+            [
+                gland_feats.view(-1, dim),
+                bg_feats.view(-1, dim)
+            ],
+            dim=0
+        )
+
+        feats = torch.nn.functional.normalize(feats, dim=2, p=2)
+
+        start = ptr
+        end = ptr + batch_size * num_samples
+        #print(start, end)
+
+        if end  > q_len - 1:
+            queue[:, - batch_size * num_samples, :] = feats
+            queue_ptr[0] = 0
+
+        else:
+            queue[:, start : end, :] = feats
+            queue_ptr[0] = end
+
+    def forward(self, pred_logits, gt_seg, queue, queue_ptr):
         mask = self.segment_mask(gts=gt_seg.detach().cpu().numpy(), preds=pred_logits.detach().cpu().numpy(), op=self.op)
         mask = torch.tensor(mask, dtype=gt_seg.dtype, device=gt_seg.device)
 
@@ -533,8 +560,9 @@ class GlandContrastLoss(nn.Module):
             torch.ones([batch_size * num_samples], device=queue.device, dtype=torch.long)
         ], dim=0).view(-1)
 
-        #print(feats.shape, 'feats')
         loss = self.constrasive(feats, labels, queue)
+
+        self._dequeue_and_enqueue(gland_feats.detach(), bg_feats.detach(), queue, queue_ptr)
 
 
 
@@ -587,15 +615,21 @@ class GlandContrastLoss(nn.Module):
 
         return loss
 
-loss = GlandContrastLoss(grid_size=28, num_nagative=2)
-
-img = torch.randn(6, 256, 480, 480)
-gt_seg = torch.randn(6, 480, 480).long()
-gt_seg[gt_seg >= 0] = 1
-gt_seg[gt_seg < 0] = 0
-#print(gt_seg.max(), gt_seg.min())
-queue = torch.randn(2, 30, 256)
-print(loss(img, gt_seg, queue))
+#loss = GlandContrastLoss(grid_size=28, num_nagative=2)
+#
+#img = torch.randn(6, 256, 120, 120)
+#gt_seg = torch.randn(6, 120, 120).long()
+#gt_seg[gt_seg >= 0] = 1
+#gt_seg[gt_seg < 0] = 0
+##print(gt_seg.max(), gt_seg.min())
+#queue = torch.randn(2, 30, 256)
+#queue_ptr = torch.zeros(1)
+##print(queue_ptr)
+##print(queue.mean())
+#print(loss(img, gt_seg, queue, queue_ptr))
+##print(queue_ptr)
+##print(queue.mean())
+#import sys; sys.exit(0)
 #import cv2
 ##img = cv2.imread('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)/testA_3_anno.bmp', -1)
 ##img = cv2.imread('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/cells_binary.png', 0)
