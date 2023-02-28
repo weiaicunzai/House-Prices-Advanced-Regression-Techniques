@@ -321,6 +321,7 @@ class TG(nn.Module):
         #self.queue = nn.Parameter(num_classes, 5000, 256)
         self.register_buffer("queue", torch.randn(num_classes, 5000, 256))
         self.queue = nn.functional.normalize(self.queue, p=2, dim=2)
+        self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
 
         #self.head = FCNHead()
         #self.cls_head = UpSample2d(
