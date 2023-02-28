@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import skimage.morphology as morph
 from skimage import measure
 import numpy as np
+import cv2
 
 
 def connected_components(image: torch.Tensor, num_iterations: int = 100) -> torch.Tensor:
@@ -586,15 +587,15 @@ class GlandContrastLoss(nn.Module):
 
         return loss
 
-#loss = GlandContrastLoss(grid_size=28, num_nagative=2)
-#
-#img = torch.randn(6, 256, 480, 480)
-#gt_seg = torch.randn(6, 480, 480).long()
-#gt_seg[gt_seg >= 0] = 1
-#gt_seg[gt_seg < 0] = 0
-##print(gt_seg.max(), gt_seg.min())
-#queue = torch.randn(2, 30, 256)
-##print(loss(img, gt_seg, queue))
+loss = GlandContrastLoss(grid_size=28, num_nagative=2)
+
+img = torch.randn(6, 256, 480, 480)
+gt_seg = torch.randn(6, 480, 480).long()
+gt_seg[gt_seg >= 0] = 1
+gt_seg[gt_seg < 0] = 0
+#print(gt_seg.max(), gt_seg.min())
+queue = torch.randn(2, 30, 256)
+print(loss(img, gt_seg, queue))
 #import cv2
 ##img = cv2.imread('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)/testA_3_anno.bmp', -1)
 ##img = cv2.imread('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/cells_binary.png', 0)
