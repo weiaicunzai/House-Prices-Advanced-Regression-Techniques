@@ -130,16 +130,6 @@ def train(net, train_dataloader, val_loader, writer, args):
 
         data_time = time.time() - train_t
 
-        # eval_start = time.time()
-            # total = time.time() - batch_start
-            # print(epoch, time.time() - batch_start)
-            # print(total / (batch_idx + 1))
-            # continue
-
-        # for batch_idx, images in enumerate(train_loader):
-
-        # images =
-
         if args.gpu:
             images = images.cuda()
             weight_maps = weight_maps.cuda()
@@ -721,7 +711,8 @@ if __name__ == '__main__':
 
     #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Monday_16_January_2023_05h_11m_49s/iter_39999.pt'))
     # test_pretrain_crag_glas_rings_prostate
-    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Tuesday_24_January_2023_01h_28m_51s/iter_39999.pt'
+    # best pretrain
+    ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Tuesday_24_January_2023_01h_28m_51s/iter_39999.pt'
 
     # test_pretrain_crag_glas_rings_prostate_with_upsampling
     #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Tuesday_24_January_2023_01h_24m_58s/iter_39999.pt'
@@ -764,15 +755,15 @@ if __name__ == '__main__':
     # glas+crag+_mocov2
     # ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_mocov2_bs64/latest.pth'
     # glas + crag + rings + sin + lizard + crc
-    ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_rings_lizard_sin_crc_mocov2/latest.pth'
+    # ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_rings_lizard_sin_crc_mocov2/latest.pth'
 
     # glas+crag+rings+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin_rings_densecl/latest.pth'
     # glas+crag+sin+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin/latest.pth'
     print('Loading pretrained checkpoint from {}'.format(ckpt_path))
-    new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path)['state_dict'])
-    #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path))
+    #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path)['state_dict'])
+    new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path))
     net.load_state_dict(new_state_dict)
     print('Done!')
     #import sys; sys.exit()
