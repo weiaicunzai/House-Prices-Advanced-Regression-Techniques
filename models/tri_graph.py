@@ -78,6 +78,18 @@ class TG(nn.Module):
         #    BasicConv2d(512, num_classes)
         #)
 
+        self.out = nn.Sequential(
+            BasicConv2d(
+                in_channels=512,
+                out_channels=256,
+                kernel_size=1
+            ),
+            #BasicConv2d(512, num_classes, 1)
+        )
+        self.register_buffer("queue", torch.randn(num_classes, 1000, 256))
+        self.queue = nn.functional.normalize(self.queue, p=2, dim=2)
+        self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
+
 
     def forward(self, x):
 
@@ -95,6 +107,15 @@ class TG(nn.Module):
         #print(type(feats['out']))
         #print(feats['out'])
         gland = self.gland_head(feats['out']) # layer 4
+        #print(gland.shape)
+        out = self.out(gland)
+        out = F.interpolate(
+            out,
+            #size=(H, W),
+            size=(int(H / 4), int(W / 4)),
+            align_corners=True,
+            mode='bilinear'
+        )
         #output = self.head(feats[-1]) # layer 4
         gland = F.interpolate(
             gland,
@@ -133,7 +154,7 @@ class TG(nn.Module):
         #else:
         #    return torch.cat([gland, cnt], dim=1)
         #else:
-        return gland, aux
+        return gland, aux, out
 
 
 
