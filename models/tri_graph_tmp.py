@@ -256,13 +256,15 @@ class GraphHead(nn.Module):
         #import sys; sys.exit()
         #self.project = GraphNet(node_num, dim)
         #self.gcns = CascadeGCNet(dim=dim, loop=1)
-        self.gcu_2 = GCU(node_num=2, dim=dim)
-        self.gcu_4 = GCU(node_num=4, dim=dim)
-        self.gcu_8 = GCU(node_num=8, dim=dim)
-        self.gcu_32 = GCU(node_num=32, dim=dim)
+        sub_dim = int(dim / 4)
+        self.gcu_2 = GCU(node_num=2, dim=sub_dim)
+        self.gcu_4 = GCU(node_num=4, dim=sub_dim)
+        self.gcu_8 = GCU(node_num=8, dim=sub_dim)
+        self.gcu_16 = GCU(node_num=16, dim=sub_dim)
+        #self.gcu_32 = GCU(node_num=32, dim=sub_dim)
 
         self.project = BasicConv2d(
-            in_channels=dim * 4,
+            in_channels=dim,
             out_channels=dim,
             kernel_size=1
         )
@@ -276,13 +278,20 @@ class GraphHead(nn.Module):
     #    return m
 
     def forward(self, x):
+
         out = []
-        out.append(self.gcu_2(x))
-        out.append(self.gcu_4(x))
-        out.append(self.gcu_8(x))
-        out.append(self.gcu_32(x))
+        inputs = x.split(64, dim=1)
+        assert len(inputs) == 4
+        #print(inputs[0].shape, x.shape)
+        out.append(self.gcu_2(inputs[0]))
+        out.append(self.gcu_4(inputs[1]))
+        out.append(self.gcu_8(inputs[2]))
+        out.append(self.gcu_16(inputs[3]))
+        #out.append(self.gcu_32(inputs[3]))
 
         out = torch.cat(out, dim=1)
+        out = out + x
+        #print(out.shape)
         #print(out.shape)
         out = self.project(out)
         return out
@@ -319,9 +328,9 @@ class TG(nn.Module):
         )
 
         #self.queue = nn.Parameter(num_classes, 5000, 256)
-        self.register_buffer("queue", torch.randn(num_classes, 5000, 256))
-        self.queue = nn.functional.normalize(self.queue, p=2, dim=2)
-        self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
+        #self.register_buffer("queue", torch.randn(num_classes, 5000, 256))
+        #self.queue = nn.functional.normalize(self.queue, p=2, dim=2)
+        #self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
 
         #self.head = FCNHead()
         #self.cls_head = UpSample2d(
