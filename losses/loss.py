@@ -58,21 +58,26 @@ def connected_components(image: torch.Tensor, num_iterations: int = 100) -> torc
         return out.view_as(image)
 #
 class GlandContrastLoss(nn.Module):
-    def __init__(self, grid_size, num_nagative, temperature=0.07):
+    def __init__(self, num_nagative, temperature=0.07):
         super().__init__()
-        self.grid_size = grid_size
+        #self.grid_size = grid_size
         self.num_nagative = num_nagative
         self.op = 'xor'
         self.temperature = temperature
-        self.base_temperature = 0.07
+        #self.base_temperature = 0.1
 
-    def segment_level_loss(self, gt, pred, op='or'):
+    def segment_level_loss(self, gt, pred, op='or', out_size=(160, 160)):
         #gt_cpu = gt.cpu().numpy()
         #pred_cpu = pred.cpu().numpy()
+        assert out_size[0] == out_size[1]
+
+        gt = cv2.resize(gt, out_size, interpolation=cv2.INTER_NEAREST)
+        pred = cv2.resize(pred, out_size, interpolation=cv2.INTER_NEAREST)
+
         if op == 'none':
             return np.zeros(gt.shape, dtype=np.uint8)
 
-        pred = morph.remove_small_objects(pred == 1, 100)
+        pred = morph.remove_small_objects(pred == 1, 3)
         gt = morph.remove_small_objects(gt == 1, 3)
         #diff = np.bitwise_xor(pred, pred2)
         #pred = pred2
@@ -216,12 +221,12 @@ class GlandContrastLoss(nn.Module):
         else:
             raise ValueError('operation not suportted')
 
-    def segment_mask(self, gts, preds, op='or'):
+    def segment_mask(self, gts, preds, op='or', out_size=(160, 160)):
         bs = gts.shape[0]
         preds = np.argmax(preds, axis=1)
         #for b_idx in range(batch_size):
         #    res.append(segment_level_loss(gt[b_idx], preds[b_idx]))
-        res = [self.segment_level_loss(gt=gts[b], pred=preds[b], op=op) for b in range(bs)]
+        res = [self.segment_level_loss(gt=gts[b], pred=preds[b], op=op, out_size=out_size) for b in range(bs)]
         res = np.stack(res, axis=0)
         return res
 
@@ -425,6 +430,8 @@ class GlandContrastLoss(nn.Module):
 
         assert dim == x_feat.shape[-1]
 
+        assert x_feat.shape[0] == labels.shape[0]
+
         # 20000, 1
         # q_len * num_classes
         queue_y = torch.cat([
@@ -452,7 +459,7 @@ class GlandContrastLoss(nn.Module):
         # print(queue_y.shape, feat_queue.shape)
         logits_max, _ =  torch.max(similirity_feat_queue, dim=1, keepdim=True)
 
-        logits = similirity_feat_queue - logits_max.detach()
+        logits = (similirity_feat_queue - logits_max.detach()) / self.temperature
 
         neg_mask = 1 - mask
         #print(neg_mask)
@@ -473,9 +480,9 @@ class GlandContrastLoss(nn.Module):
         pos_logits = exp_logits * mask + 1e-7
 
         # sum of all negative samples
-        neg_logits = exp_logits * neg_mask
+        neg_logits = exp_logits * neg_mask + 1e-7
         #print(neg_logits.shape) [num_samples, q_len]
-        neg_logits = neg_logits.sum(1, keepdim=True) + 1e-7
+        neg_logits = neg_logits.sum(1, keepdim=True)
 
         log_prob = torch.log(pos_logits) - torch.log(pos_logits + neg_logits)
         #print(log_prob)
@@ -485,8 +492,8 @@ class GlandContrastLoss(nn.Module):
         mean_log_prob_pos = log_prob.sum(1) / mask.sum(1)
         #print(mean_log_prob_pos.shape)
 
-        loss = - (self.temperature / self.base_temperature) * mean_log_prob_pos
-        loss = loss.mean()
+        loss = - mean_log_prob_pos.mean()
+        #loss = loss.mean()
 
         return loss
 
@@ -529,19 +536,29 @@ class GlandContrastLoss(nn.Module):
         end = ptr + batch_size * num_samples
         #print(start, end)
 
+        #print(feats.shape, queue.shape, start, end)
         if end  > q_len - 1:
-            queue[:, - batch_size * num_samples, :] = feats
+            queue[:, - batch_size * num_samples:, :] = feats
             queue_ptr[0] = 0
 
         else:
             queue[:, start : end, :] = feats
             queue_ptr[0] = end
 
-    def forward(self, pred_logits, gt_seg, queue, queue_ptr):
-        mask = self.segment_mask(gts=gt_seg.detach().cpu().numpy(), preds=pred_logits.detach().cpu().numpy(), op=self.op)
+    def forward(self, feats, pred_logits, gt_seg, queue=None, queue_ptr=None):
+
+
+
+        mask = self.segment_mask(gts=gt_seg.detach().cpu().numpy(), preds=pred_logits.detach().cpu().numpy(), op=self.op, out_size=(240, 240))
         mask = torch.tensor(mask, dtype=gt_seg.dtype, device=gt_seg.device)
 
-        gland_feats, bg_feats = self.hard_sampling_even(pred_logits, gt_seg, mask)
+
+        #pred_logits = pred_logits * mask
+
+
+        #return mask
+
+        gland_feats, bg_feats = self.hard_sampling_even(feats, gt_seg, mask)
 
         # gland : 0
         # bg : 1
@@ -559,10 +576,14 @@ class GlandContrastLoss(nn.Module):
             torch.ones([batch_size * num_samples], device=queue.device, dtype=torch.long)
         ], dim=0).view(-1)
 
+
+        #print(feats.shape, labels.shape, queue.shape)
         loss = self.constrasive(feats, labels, queue)
 
         self._dequeue_and_enqueue(gland_feats.detach(), bg_feats.detach(), queue, queue_ptr)
 
+        #print(loss)
+        #import sys; sys.exit()
 
 
         #print(mask.shape, 'ccc', pred_logits.shape, gt_seg.shape)
