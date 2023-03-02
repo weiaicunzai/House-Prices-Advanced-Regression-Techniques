@@ -230,6 +230,8 @@ def make_blocks(
     net_block_idx = 0
     net_stride = 4
     dilation = prev_dilation = 1
+    multi_grid = kwargs.pop('multi_grid')
+
     for stage_idx, (planes, num_blocks, db) in enumerate(zip(channels, block_repeats, drop_blocks(drop_block_rate))):
         stage_name = f'layer{stage_idx + 1}'  # never liked this name, but weight compat requires it
         #stride = 1 if stage_idx == 0 else 2
@@ -248,14 +250,19 @@ def make_blocks(
                 stride=stride, dilation=dilation, first_dilation=prev_dilation, norm_layer=kwargs.get('norm_layer'))
             downsample = downsample_avg(**down_kwargs) if avg_down else downsample_conv(**down_kwargs)
 
+
         block_kwargs = dict(reduce_first=reduce_first, dilation=dilation, drop_block=db, **kwargs)
+
         blocks = []
+
+        stage_multi_grid = multi_grid if stage_idx == len(block_repeats) - 1 else None
+
         for block_idx in range(num_blocks):
             downsample = downsample if block_idx == 0 else None
             stride = stride if block_idx == 0 else 1
             block_dpr = drop_path_rate * net_block_idx / (net_num_blocks - 1)  # stochastic depth linear decay rule
             blocks.append(block_fn(
-                inplanes, planes, stride, downsample, first_dilation=prev_dilation,
+                inplanes, planes, stride, downsample, first_dilation=prev_dilation if stage_multi_grid is None else stage_multi_grid[block_idx],
                 drop_path=DropPath(block_dpr) if block_dpr > 0. else None, **block_kwargs))
             prev_dilation = dilation
             inplanes = planes * block_fn.expansion
@@ -529,6 +536,7 @@ class ResNet(nn.Module):
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.grad_checkpointing = False
+        block_args['multi_grid'] = (1, 2, 4)
 
         # Stem
         deep_stem = 'deep' in stem_type
