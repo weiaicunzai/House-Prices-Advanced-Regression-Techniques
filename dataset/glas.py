@@ -24,8 +24,8 @@ class Glas(Dataset):
         if download:
             download_url(url, path, file_name, md5=md5)
 
-        #self.class_names = ['background', 'gland']
-        self.class_names = ['background', 'gland', 'cnt']
+        self.class_names = ['background', 'gland']
+        #self.class_names = ['background', 'gland', 'cnt']
         # self.ignore_index = -100
         self.ignore_index = 255
         self.class_num = len(self.class_names)
@@ -87,7 +87,7 @@ class Glas(Dataset):
         self.times = 30000
 
     def construct_contour(self, label):
-        if self.image_set == 'train':
+        if self.image_set == 'train' and self.class_num == 3:
             kernel = np.ones((3, 3), np.uint8)
             label[label > 0] = 1
             label_tmp = label.copy()
