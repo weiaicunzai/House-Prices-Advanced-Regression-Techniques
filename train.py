@@ -132,16 +132,6 @@ def train(net, train_dataloader, val_loader, writer, args):
 
         data_time = time.time() - train_t
 
-        # eval_start = time.time()
-            # total = time.time() - batch_start
-            # print(epoch, time.time() - batch_start)
-            # print(total / (batch_idx + 1))
-            # continue
-
-        # for batch_idx, images in enumerate(train_loader):
-
-        # images =
-
         if args.gpu:
             images = images.cuda()
             weight_maps = weight_maps.cuda()
@@ -730,7 +720,8 @@ if __name__ == '__main__':
 
     #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Monday_16_January_2023_05h_11m_49s/iter_39999.pt'))
     # test_pretrain_crag_glas_rings_prostate
-    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Tuesday_24_January_2023_01h_28m_51s/iter_39999.pt'
+    # best pretrain
+    ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Tuesday_24_January_2023_01h_28m_51s/iter_39999.pt'
 
     # test_pretrain_crag_glas_rings_prostate_with_upsampling
     #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Tuesday_24_January_2023_01h_24m_58s/iter_39999.pt'
