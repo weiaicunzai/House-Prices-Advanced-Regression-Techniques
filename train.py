@@ -28,7 +28,7 @@ from metric import eval_metrics, gland_accuracy_object_level
 #from loss import SegmentLevelLoss, LossVariance
 from dataloader import IterLoader
 import test_aug
-from losses import DiceLoss, WeightedLossWarpper
+from losses import DiceLoss, WeightedLossWarpper, GlandContrastLoss
 import sampler as _sampler
 
 
@@ -70,6 +70,8 @@ def train(net, train_dataloader, val_loader, writer, args):
     cnt_loss_fn_ce = nn.CrossEntropyLoss(weight=cnt_weight, ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
     cnt_loss_fn_dice = DiceLoss(class_weight=cnt_weight, ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
     #var_loss_fn = LossVariance()
+
+    contrasive_loss_fn = GlandContrastLoss(4)
 
     #loss_l2 = nn.MSELoss()
     #loss_seg = SegmentLevelLoss(op=args.op)
@@ -165,7 +167,7 @@ def train(net, train_dataloader, val_loader, writer, args):
                 #loss = loss.mean()
                 #######  two branches
 
-                gland_preds, aux_preds = net(images)
+                gland_preds, aux_preds, out = net(images)
 
                 #var_loss = var_loss_fn(gland_preds, masks)
                 loss = gland_loss_fn_ce(gland_preds, masks) + \
@@ -178,8 +180,15 @@ def train(net, train_dataloader, val_loader, writer, args):
                 #print(weight_maps.max(),  weight_maps.min())
                 #print(loss.shape, weight_maps.shape)
                 #print(weight_maps.mean())
+                #mask = contrasive_loss(gland_preds, masks)
                 loss = loss * weight_maps + 0.4 * loss_aux * weight_maps
-                loss = loss.mean()
+
+                #if iter_idx > 20000:
+                contrasive_loss = contrasive_loss_fn(out, gland_preds, masks, queue=net.queue, queue_ptr=net.queue_ptr)
+                    #loss = loss + mask * 2
+
+
+                loss = loss.mean() + contrasive_loss
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -764,15 +773,16 @@ if __name__ == '__main__':
     # glas+crag+_mocov2
     # ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_mocov2_bs64/latest.pth'
     # glas + crag + rings + sin + lizard + crc
-    ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_rings_lizard_sin_crc_mocov2/latest.pth'
+    #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_rings_lizard_sin_crc_mocov2/latest.pth'
+    ckpt_path = 'best_pretrain/iter_39999.pt'
 
     # glas+crag+rings+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin_rings_densecl/latest.pth'
     # glas+crag+sin+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin/latest.pth'
     print('Loading pretrained checkpoint from {}'.format(ckpt_path))
-    new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path)['state_dict'])
-    #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path))
+    #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path)['state_dict'])
+    new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path))
     net.load_state_dict(new_state_dict)
     print('Done!')
     #import sys; sys.exit()
