@@ -4,6 +4,8 @@ segmentron/solver/loss.py (Apache-2.0 License)"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+#from pytorch_metric_learning import losses
+
 
 import skimage.morphology as morph
 from skimage import measure
@@ -65,6 +67,7 @@ class GlandContrastLoss(nn.Module):
         self.op = 'xor'
         self.temperature = temperature
         #self.base_temperature = 0.1
+        #self.infonce_loss_fn = losses.NTXentLoss(temperature=0.07)
 
     def segment_level_loss(self, gt, pred, op='or', out_size=(160, 160)):
         #gt_cpu = gt.cpu().numpy()
@@ -263,6 +266,8 @@ class GlandContrastLoss(nn.Module):
 
         # assign the gt gland to the non-gland image
         candidate_mask[mask] = gt_seg[mask]
+        mask1 = candidate_mask.sum(dim=(2, 3)) == 0
+        #print((mask.float() - mask1.float()).mean(), 'ccc')
 
         # randomly sample k elements in candidate_mask
         candidate_mask = candidate_mask + torch.randn(candidate_mask.shape, device=candidate_mask.device)
@@ -295,6 +300,7 @@ class GlandContrastLoss(nn.Module):
 
         gland_feats = self._sample_feats_even(pred_logits, gland_hard_mask, labels)
         bg_feats = self._sample_feats_even(pred_logits, bg_hard_mask, labels)
+
 
         return gland_feats, bg_feats
 
@@ -420,6 +426,35 @@ class GlandContrastLoss(nn.Module):
     #     # neg queue
     #     # negative logits: Nxk
 
+   # def contrasive(self, gland_feats, bg_feats, queue):
+
+   #     pos_gland = torch.einsum('n')
+
+    def contrasive_single_class(self, anchor, postive, negative):
+        #print(anchor.shape, postive.T.shape)
+
+        #num_pos = postive.shape[0]
+
+        logits_pos = torch.einsum('nc, ck->nk', [anchor, postive.T])
+        logits_neg = torch.einsum('nc, ck->nk', [anchor, negative.T])
+
+
+        numberator = torch.exp(logits_pos / self.temperature)
+        #print(numberator.shape, logits_neg.shape)
+        denominator = torch.exp(logits_neg / self.temperature).sum(dim=1).unsqueeze(-1) + numberator
+
+        log_exp = -torch.log((numberator / denominator)).sum(dim=1) / logits_pos.shape[-1]
+        #print(postive.shape[0], logits_pos.shape[-1])
+        #print(log_exp.shape)
+
+        #import sys; sys.exit()
+        return log_exp.mean()
+
+
+
+
+
+
 
 
     def constrasive(self, x_feat, labels, queue):
@@ -427,6 +462,7 @@ class GlandContrastLoss(nn.Module):
 
         num_classes, q_len, dim = queue.shape
         batch_size, num_samples = x_feat.shape[0], x_feat.shape[1]
+
 
         assert dim == x_feat.shape[-1]
 
@@ -451,15 +487,19 @@ class GlandContrastLoss(nn.Module):
 
         #print(x_feat.device, queue_feat.device)
         #print(x_feat.shape, queue_feat.T.shape) torch.Size([12, 2, 256]) torch.Size([256, 10000])
+        x_feat = torch.nn.functional.normalize(x_feat, dim=1, p=2)
+        #print(x_feat.shape)
+        #print((x_feat[0] * x_feat[0]).sum())
         similirity_feat_queue = torch.div(torch.matmul(x_feat, queue_feat.T),
                                         self.temperature)
 
+        print(similirity_feat_queue.max())
         # torch.Size([12, 2, 10000])
         # print(similirity_feat_queue.shape)
         # print(queue_y.shape, feat_queue.shape)
         logits_max, _ =  torch.max(similirity_feat_queue, dim=1, keepdim=True)
 
-        logits = (similirity_feat_queue - logits_max.detach()) / self.temperature
+        logits = (similirity_feat_queue - logits_max.detach())
 
         neg_mask = 1 - mask
         #print(neg_mask)
@@ -494,6 +534,7 @@ class GlandContrastLoss(nn.Module):
 
         loss = - mean_log_prob_pos.mean()
         #loss = loss.mean()
+        #print('loss', loss)
 
         return loss
 
@@ -517,35 +558,67 @@ class GlandContrastLoss(nn.Module):
         #pos = anchor_feats
 
     def _dequeue_and_enqueue(self, gland_feats, bg_feats, queue, queue_ptr):
-        batch_size, num_samples, dim = gland_feats.shape
+        #batch_size, num_samples, dim = gland_feats.shape
+        num_feats, dim = gland_feats.shape
         num_classes, q_len, dim = queue.shape
 
         ptr = queue_ptr[0].long().item()
 
         feats = torch.stack(
             [
-                gland_feats.view(-1, dim),
-                bg_feats.view(-1, dim)
+                #gland_feats.view(-1, dim),
+                #bg_feats.view(-1, dim)
+                gland_feats,
+                bg_feats
             ],
             dim=0
         )
 
-        feats = torch.nn.functional.normalize(feats, dim=2, p=2)
+        #feats = torch.nn.functional.normalize(feats, dim=2, p=2)
+        #print(feats[1, 3, :30])
 
         start = ptr
-        end = ptr + batch_size * num_samples
+        end = ptr + num_feats
         #print(start, end)
 
         #print(feats.shape, queue.shape, start, end)
         if end  > q_len - 1:
-            queue[:, - batch_size * num_samples:, :] = feats
+            queue[:, - num_feats:, :] = feats
             queue_ptr[0] = 0
 
         else:
             queue[:, start : end, :] = feats
             queue_ptr[0] = end
 
-    def forward(self, feats, pred_logits, gt_seg, queue=None, queue_ptr=None):
+    #def my_infonce(self, gland, labels):
+
+    def compute_loss(self, feats, queue):
+
+        embedings = torch.cat([
+            feats[:1, :],
+            queue,
+        ])
+
+        labels = torch.arange(
+        )
+        labels[:feats.shape[0]] = 0
+        print(embedings.shape, labels.shape)
+
+        return self.infonce_loss_fn(embedings, labels)
+
+    def _save_img(self, t, save_path):
+        #print(gt_seg.shape)
+
+        for i in enuermt:
+            #print(i.shape)
+
+            img_name = os.path.join(save_path, '{}.jpg')
+            print(img_name)
+
+            i.permute(1, 2, 0)
+
+
+    def forward(self, feats, pred_logits, gt_seg, queue=None, queue_ptr=None, neck=None):
 
 
 
@@ -553,32 +626,106 @@ class GlandContrastLoss(nn.Module):
         mask = torch.tensor(mask, dtype=gt_seg.dtype, device=gt_seg.device)
 
 
-        #pred_logits = pred_logits * mask
-
-
         #return mask
 
+
+
+        #mask = pred_logits.argmax(dim=1)
+        #print(mask.shape)
+
         gland_feats, bg_feats = self.hard_sampling_even(feats, gt_seg, mask)
+
+        ####################################
+        # save gt in tmp
+
+        gland_feats = neck(gland_feats)
+        bg_feats = neck(bg_feats)
+        #print(gland_feats.shape, bg_feats.shape)
 
         # gland : 0
         # bg : 1
 
-        feats = torch.cat([
-            gland_feats,
-            bg_feats
-        ], dim=0)
-        feats = feats.view(-1, feats.shape[-1])
+        #feats = torch.cat([
+        #    gland_feats,
+        #    bg_feats
+        #], dim=0)
+        #feats = feats.view(-1, feats.shape[-1])
 
-        batch_size, num_samples, dim = gland_feats.shape
+        #batch_size, num_samples, dim = gland_feats.shape
+        #feats = torch.nn.functional.normalize(feats, dim=1, p=2)
 
-        labels = torch.cat([
-            torch.zeros([batch_size * num_samples], device=queue.device, dtype=torch.long),
-            torch.ones([batch_size * num_samples], device=queue.device, dtype=torch.long)
-        ], dim=0).view(-1)
+
+        #labels = torch.cat([
+        #    torch.zeros([batch_size * num_samples], device=queue.device, dtype=torch.long),
+        #    torch.ones([batch_size * num_samples], device=queue.device, dtype=torch.long)
+        #], dim=0).view(-1)
+
 
 
         #print(feats.shape, labels.shape, queue.shape)
-        loss = self.constrasive(feats, labels, queue)
+        #loss = self.constrasive(feats, labels, queue)
+        #print(feats.shape, labels.shape)
+        #feats = torch.nn.
+        #queue_y = torch.cat([
+        #    torch.zeros([1, queue.shape[1]], device=queue.device, dtype=torch.long),
+        #    torch.ones([1, queue.shape[1]], device=queue.device, dtype=torch.long)
+        #], dim=0).view(-1)
+
+
+        #queue_feat = queue.view(-1, dim)
+
+        #print(queue_y.shape, queue_feat.shape, feats.shape, labels.shape)
+        #nce_feats = torch.cat(
+        #    [
+        #        feats,
+        #        queue_feat
+        #    ]
+        #)
+        #nce_labels = torch.cat(
+        #    [
+        #        labels,
+        #        queue_y
+        #    ]
+        #)
+
+
+        #loss = self.infonce_loss_fn(feats, labels)
+
+
+        gland_feats = torch.nn.functional.normalize(gland_feats.view(-1, gland_feats.shape[-1]), dim=1, p=2)
+        bg_feats = torch.nn.functional.normalize(bg_feats.view(-1, bg_feats.shape[-1]), dim=1, p=2)
+
+        gland_queue = queue[0]
+        bg_queue = queue[1]
+
+        #zeros_short = torch.zeros([gland_feats.shape[0]], device=queue.device, dtype=torch.long)
+        #ones_long = torch.ones([gland_queue.shape[0]], device=queue.device, dtype=torch.long)
+
+
+        #gland_queue_labels = torch.zeros([gland_feats.shape[0]], device=queue.device, dtype=torch.long)
+        #bg_queue_labels = torch.ones([bg_feats.shape[0]], device=queue.device, dtype=torch.long)
+        #gland_loss = self.compute_loss(gland_feats, bg_queue, zeros_short, ones_long)
+        #gland_loss = self.compute_loss(gland_feats, bg_queue)
+        gland_loss = self.contrasive_single_class(anchor=gland_feats, postive=gland_queue.detach(), negative=bg_queue.detach())
+        bg_loss = self.contrasive_single_class(anchor=bg_feats, postive=bg_queue.detach(), negative=gland_feats.detach())
+
+        #print(bg_loss)
+        #print((gland_loss + bg_loss) / 2)
+        #import sys; sys.exit()
+
+
+        #gland_loss = self.infonce_loss_fn(
+        #    torch.cat([
+        #        gland_feats,
+        #        bg_queue
+        #    ])
+        #)
+        #print(id(bg_queue), id(queue[1]))
+        #import sys; sys.exit()
+
+        #loss = self.infonce_loss_fn()
+
+        loss = (gland_loss + bg_loss) / 2
 
         self._dequeue_and_enqueue(gland_feats.detach(), bg_feats.detach(), queue, queue_ptr)
 
@@ -633,7 +780,7 @@ class GlandContrastLoss(nn.Module):
         #print(pred_seg.shape)
         #print(pred_seg)
 
-        return loss
+        return loss, mask
 
 #loss = GlandContrastLoss(grid_size=28, num_nagative=2)
 #

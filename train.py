@@ -174,10 +174,15 @@ def train(net, train_dataloader, val_loader, writer, args):
                 loss = loss * weight_maps + 0.4 * loss_aux * weight_maps
 
                 #if iter_idx > 20000:
-                contrasive_loss = contrasive_loss_fn(out, gland_preds, masks, queue=net.queue, queue_ptr=net.queue_ptr)
-                    #loss = loss + mask * 2
+                contrasive_loss, mask = contrasive_loss_fn(out, gland_preds, masks, queue=net.queue, queue_ptr=net.queue_ptr, neck=net.neck)
+                #print(loss.shape, mask.shape)
+                #import sys; sys.exit()
+                mask = torch.nn.functional.interpolate(mask.unsqueeze(1).float(), size=loss.shape[-2:]).squeeze(1)
+                #print(mask.shape)
+                loss = loss + mask * loss
 
 
+                #print(contrasive_loss)
                 loss = loss.mean() + contrasive_loss
 
             scaler.scale(loss).backward()

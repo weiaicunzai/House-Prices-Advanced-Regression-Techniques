@@ -232,17 +232,81 @@ class GraphNet(nn.Module):
 
         return nodes.view(B, C, self.node_num).contiguous(), soft_assign
 
+
+#class Attention(nn.Module):
+#    def __init__(self, project_ratio=8):
+#        self.project = self.neck = nn.Sequential(
+#            nn.Linear(, 2048),
+#            nn.ReLU(inplace=True),
+#            nn.Linear(2048, 256)
+#        )
+
+
 class GCU(nn.Module):
     def __init__(self, node_num, dim, loop=1):
         super().__init__()
         self.project = GraphNet(node_num, dim)
         self.gcns = CascadeGCNet(dim=dim, loop=loop)
+        self.r = 0.05
 
 
-    def forward(self, x):
+    def attention(self, q, k):
+        b, dim, num_nodes = q.shape
+        q_len, q_dim = k.shape
+        q = q.permute(0, 2, 1) # [B, num_nodes, dim]
+        q = nn.functional.normalize(q, p=2, dim=2)
+        #k = k.T.expand(b, q_dim, q_len) # [B, dim, q_len]
+
+        #print(q.shape, k.shape)
+        sim = torch.einsum('bnc, bck->bnk', [q, k.T.expand(b, q_dim, q_len)]) / 0.07
+        #print(sim.shape)
+        #k = k.permute(0, )
+        #print(sim.shape, k.shape, k.requires_grad)
+        weighted_sim = sim.softmax(dim=2)
+        _, indices = weighted_sim.topk(int(q_len * self.r), dim=2)
+
+        # gather top k similarity matrix
+        top_sim = torch.gather(input=weighted_sim, dim=2, index=indices)
+
+        #print(indices.shape, top_sim.shape, weighted_sim.shape)
+        # torch.Size([16, 8, 200]) torch.Size([16, 8, 200]) torch.Size([16, 8, 2000])
+        top_k_indices = indices.unsqueeze(-1).expand(b, num_nodes, int(q_len * self.r), dim)
+        #print(top_k_indices, weighted_sim)
+        #print(k.shape, 'no expand')
+        k_expand = k.unsqueeze(0).unsqueeze(0).expand(b, num_nodes, -1, -1)
+        #print(k_expand.shape, 'expand')
+        top_k = torch.gather(input=k_expand, dim=2, index=top_k_indices)
+        #print(top_k, top_sim)
+        #print(top_k.shape, top_sim.shape)
+        weighted_top_k = top_k * top_sim.unsqueeze(-1)
+        attn_top_k = weighted_top_k.sum(dim=2)
+        #print(attn_top_k.shape, 'attn_top_k')
+        #print(sim.shape, k.shape)
+        q = attn_top_k + q
+        #print(q.shape, attentio)
+        q = q.permute(0, 2, 1) # [B, num_nodes, dim]
+        #import sys; sys.exit()
+        #weighted_sim_sum = weighted_sim.sum(dim=1)
+        #q = q * weighted_sim_sum
+
+
+        return q
+
+
+
+
+    def forward(self, x, queue=None):
         graph, assign = self.project(x)
         graph = self.gcns(graph)
+
+        # graph : [16, 256, 8][B, dim, num_nodes]
+        if queue is not None:
+            attn = self.attention(graph, queue)
+            graph = graph + attn
+
         graph = graph.bmm(assign)
+
+
         graph = graph.view(x.shape)
 
         return graph
@@ -257,6 +321,7 @@ class GraphHead(nn.Module):
         #self.project = GraphNet(node_num, dim)
         #self.gcns = CascadeGCNet(dim=dim, loop=1)
         sub_dim = int(dim / 4)
+        assert sub_dim * 4 == dim
         self.gcu_2 = GCU(node_num=2, dim=sub_dim)
         self.gcu_4 = GCU(node_num=4, dim=sub_dim)
         self.gcu_8 = GCU(node_num=8, dim=sub_dim)
@@ -269,6 +334,8 @@ class GraphHead(nn.Module):
             kernel_size=1
         )
 
+        self.attention_gcu = GCU(node_num=8, dim=dim)
+
     #def restore(self, graph, assign):
     #    #assign = graph.permute(0, 2, 1).contiguous().bmm(region1)
     #    print(assign.shape)
@@ -277,7 +344,7 @@ class GraphHead(nn.Module):
     #    m = m.permute(0, 2, 1).contiguous()
     #    return m
 
-    def forward(self, x):
+    def forward(self, x, queue=None):
 
         out = []
         inputs = x.split(64, dim=1)
@@ -290,10 +357,16 @@ class GraphHead(nn.Module):
         #out.append(self.gcu_32(inputs[3]))
 
         out = torch.cat(out, dim=1)
-        out = out + x
+
+        if queue is not None:
+            queue = queue.view(-1, queue.shape[-1])
+
+        out = self.attention_gcu(out, queue)
         #print(out.shape)
         #print(out.shape)
         out = self.project(out)
+        out = out + x
+
         return out
         #graph, assign = self.project(x)
         #graph = self.gcns(graph)
@@ -327,6 +400,17 @@ class TG(nn.Module):
             nn.Conv2d(256, num_classes, 1)
         )
 
+        q_len = 1000
+        self.register_buffer("queue", torch.randn(num_classes, q_len, 256))
+        self.queue = nn.functional.normalize(self.queue, p=2, dim=2)
+        self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
+
+        self.neck = nn.Sequential(
+            nn.Linear(2048, 2048),
+            nn.ReLU(inplace=True),
+            nn.Linear(2048, 256)
+        )
+
         #self.queue = nn.Parameter(num_classes, 5000, 256)
         #self.register_buffer("queue", torch.randn(num_classes, 5000, 256))
         #self.queue = nn.functional.normalize(self.queue, p=2, dim=2)
@@ -345,18 +429,25 @@ class TG(nn.Module):
         #)
         #self.cls_head = nn.Sequential(
         #self.gland_head = GlandHead(32, 512)
-        self.gland_head = nn.Sequential(
+
+        #self.out = nn.Sequential(
+        #    BasicConv2d(
+        #        in_channels=512,
+        #        out_channels=256,
+        #        kernel_size=1
+        #    ),
+        #    #BasicConv2d(512, num_classes, 1)
+        #)
+
+        self.gland_head_project = nn.Sequential(
             BasicConv2d(
                 in_channels=2048,
                 #out_channels=512,
                 out_channels=self.graph_head_dim,
                 kernel_size=1
-            ),
-            #GraphHead(node_num=16, dim=512)
-            GraphHead(dim=self.graph_head_dim)
-            #GraphHead(dim=111)
-        #    #BasicConv2d(512, num_classes, 1)
+            )
         )
+        self.gland_head = GraphHead(dim=self.graph_head_dim)
 
         self.aux_head = nn.Sequential(
             BasicConv2d(
@@ -382,15 +473,30 @@ class TG(nn.Module):
         feats = self.backbone(x)
         low_level_feat = self.project(feats['low_level'])
 
+        #print(feats['out'].shape)
+        #import sys; sys.exit()
+
 
         #out =
+
+ #       out = self.out()
+ #       out = F.interpolate(
+ #           out,
+ #           #size=(H, W),
+ #           size=(int(H / 4), int(W / 4)),
+ #           align_corners=True,
+ #           mode='bilinear'
+ #       )
 
 
         #print(type(feats['out']))
         #print(feats['out'])
         #print(self.gland_head)
         #print(sum(p.numel() for p in self.gland_head[1].parameters() if p.requires_grad))
-        gland = self.gland_head(feats['out']) # layer 4
+        gland_feats = self.gland_head_project(feats['out'])
+        gland = self.gland_head(gland_feats, queue=self.queue.detach()) # layer 4
+
+
         #output = self.head(feats[-1]) # layer 4
         gland = F.interpolate(
             gland,
@@ -429,7 +535,8 @@ class TG(nn.Module):
         #else:
         #    return torch.cat([gland, cnt], dim=1)
         #else:
-        return gland, aux
+        #return gland, aux
+        return gland, aux, feats['out']
 
 
 
