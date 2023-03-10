@@ -60,7 +60,7 @@ def connected_components(image: torch.Tensor, num_iterations: int = 100) -> torc
         return out.view_as(image)
 #
 class GlandContrastLoss(nn.Module):
-    def __init__(self, num_nagative, temperature=0.07):
+    def __init__(self, num_nagative, temperature=0.07, ignore_idx=255):
         super().__init__()
         #self.grid_size = grid_size
         self.num_nagative = num_nagative
@@ -68,6 +68,12 @@ class GlandContrastLoss(nn.Module):
         self.temperature = temperature
         #self.base_temperature = 0.1
         #self.infonce_loss_fn = losses.NTXentLoss(temperature=0.07)
+        self.store_values = {
+            'pred':[],
+            'gt': []
+        }
+
+        self.ignore_idx = ignore_idx
 
     def segment_level_loss(self, gt, pred, op='or', out_size=(160, 160)):
         #gt_cpu = gt.cpu().numpy()
@@ -80,8 +86,25 @@ class GlandContrastLoss(nn.Module):
         if op == 'none':
             return np.zeros(gt.shape, dtype=np.uint8)
 
+
+        # remove ignore_idx
+        # pred idx only contains 0 or 1, so we need to remove the blank region acoording = gt
+        pred[gt==self.ignore_idx] = 0
+
+
+        #if gt.max() == self.ignore_idx:
+        #print('after', np.unique(pred), pred.sum())
+
+
         pred = morph.remove_small_objects(pred == 1, 3)
+
         gt = morph.remove_small_objects(gt == 1, 3)
+
+        #cv2.imwrite('a1.png', results[0] / results[0].max() * 255)
+
+
+
+        #cv2.imwrite('tmp/xor_gt{}.png'.format(self.idx), gt.numpy() / (gt.max()+1e-8) * 255)
         #diff = np.bitwise_xor(pred, pred2)
         #pred = pred2
         #cv2.imwrite('diff.png', diff / diff.max() * 255)
@@ -92,6 +115,8 @@ class GlandContrastLoss(nn.Module):
         pred_labeled, pred_num = measure.label(pred, return_num=True)
         #print(pred_num)
         gt_labeled, gt_num = measure.label(gt, return_num=True)
+        #print(pred_labeled.shape)
+        self.store_values['pred'].append(pred_labeled)
 
         #gt_colors = assign_colors(gt_labeled, gt_num)
         #pred_colors = assign_colors(pred_labeled, pred_num)
@@ -189,6 +214,8 @@ class GlandContrastLoss(nn.Module):
             #print('max min', finish - start)
         results.append(res)
         res = cv2.bitwise_or(results[0], results[1])
+        #print(results[0].max(), gt_num, '????')
+        #cv2.imwrite('a1.png', results[0] / results[0].max() * 255)
         if op == 'or':
             return res
 
@@ -208,6 +235,10 @@ class GlandContrastLoss(nn.Module):
                 if res[pred_labeled == i].max() != 0:
                     pred_res[pred_labeled == i] = 1
 
+
+            #print(pred_res.shape, 'pred_res.shape')
+            #self.store_values['pred'].append(pred_res)
+            #self.store_values['gt'].append(gt_res)
             res = cv2.bitwise_xor(pred_res, gt_res)
             return res
             #return pred_res
@@ -621,7 +652,13 @@ class GlandContrastLoss(nn.Module):
     def forward(self, feats, pred_logits, gt_seg, queue=None, queue_ptr=None, neck=None):
 
 
+        self.store_values['pred'] = []
+        self.store_values['gt'] = []
 
+
+        print()
+        print(gt_seg.max())
+        print()
         mask = self.segment_mask(gts=gt_seg.detach().cpu().numpy(), preds=pred_logits.detach().cpu().numpy(), op=self.op, out_size=(240, 240))
         mask = torch.tensor(mask, dtype=gt_seg.dtype, device=gt_seg.device)
 
