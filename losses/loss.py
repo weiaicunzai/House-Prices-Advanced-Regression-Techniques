@@ -76,8 +76,6 @@ class GlandContrastLoss(nn.Module):
         self.ignore_idx = ignore_idx
 
     def segment_level_loss(self, gt, pred, op='or', out_size=(160, 160)):
-        #gt_cpu = gt.cpu().numpy()
-        #pred_cpu = pred.cpu().numpy()
         assert out_size[0] == out_size[1]
 
         gt = cv2.resize(gt, out_size, interpolation=cv2.INTER_NEAREST)
@@ -92,30 +90,19 @@ class GlandContrastLoss(nn.Module):
         pred[gt==self.ignore_idx] = 0
 
 
-        #if gt.max() == self.ignore_idx:
-        #print('after', np.unique(pred), pred.sum())
 
-
-        pred = morph.remove_small_objects(pred == 1, 3)
-
-        gt = morph.remove_small_objects(gt == 1, 3)
-
-        #cv2.imwrite('a1.png', results[0] / results[0].max() * 255)
+        # set connectivity to 1 and set min_size to 64 as default
+        # because some of the groud truth gland will have sawtooth effect due to the data augmentation
+        pred = morph.remove_small_objects(pred == 1, connectivity=1)
+        gt = morph.remove_small_objects(gt == 1, connectivity=1)
 
 
 
-        #cv2.imwrite('tmp/xor_gt{}.png'.format(self.idx), gt.numpy() / (gt.max()+1e-8) * 255)
-        #diff = np.bitwise_xor(pred, pred2)
-        #pred = pred2
-        #cv2.imwrite('diff.png', diff / diff.max() * 255)
+        # set connectivity to 1 to avoid glands clustered together due to resize
+        # only counts cross connectivity
+        pred_labeled, pred_num = measure.label(pred, return_num=True, connectivity=1)
+        gt_labeled, gt_num = measure.label(gt, return_num=True, connectivity=1)
 
-        #print(type(pred))
-        #print(pred.dtype)
-        #pred = measure.label(pred)
-        pred_labeled, pred_num = measure.label(pred, return_num=True)
-        #print(pred_num)
-        gt_labeled, gt_num = measure.label(gt, return_num=True)
-        #print(pred_labeled.shape)
         self.store_values['pred'].append(pred_labeled)
 
         #gt_colors = assign_colors(gt_labeled, gt_num)
@@ -161,6 +148,7 @@ class GlandContrastLoss(nn.Module):
             mask = (pred_labeled == i) & (gt != 0)
 
             # for each pixel of mask in corresponding gt img
+            #print(gt_labeled[mask].shape)
             if len(gt_labeled[mask]) == 0:
                 # no gt gland instance in corresponding
                 # location of gt image
