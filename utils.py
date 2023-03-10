@@ -1098,3 +1098,18 @@ def on_load_checkpoint(model_state_dict, pretrained_state_dict):
 
     #if is_changed:
     #    checkpoint.pop("optimizer_states", None)
+
+
+
+def to_img(tensor):
+    t = tensor.permute(1, 2, 0)
+    mean = torch.tensor(settings.MEAN).view(1, 1, -1)
+    #print(mean.shape)
+    std = torch.tensor(settings.STD).view(1, 1, -1)
+    #print(std.shape)
+
+    t = (t * std + mean) * 255
+
+    #print(t.shape)
+
+    return t
