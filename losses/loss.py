@@ -145,16 +145,18 @@ class GlandContrastLoss(nn.Module):
         res = np.zeros(gt.shape, dtype=np.uint8)
         for i in range(0, pred_num):
             i += 1
+
+            # gt != 0 is gt gland
+            # pred_labeled == i is the ith gland of pred
             mask = (pred_labeled == i) & (gt != 0)
 
             # for each pixel of mask in corresponding gt img
-            #print(gt_labeled[mask].shape)
+            #print(gt_labeled[mask].shape[0], len(gt_labeled[mask]))
             if len(gt_labeled[mask]) == 0:
                 # no gt gland instance in corresponding
                 # location of gt image
 
                 res[pred_labeled == i] = 1
-                #cv2.imwrite('resP{}.png'.format(i), res)
                 continue
 
             if gt_labeled[mask].min() != gt_labeled[mask].max():
@@ -162,6 +164,7 @@ class GlandContrastLoss(nn.Module):
                 # gt image
                 res[pred_labeled == i] = 1
                 #cv2.imwrite('resP{}.png'.format(i), res)
+
 
         #gt
         results.append(res)
@@ -211,7 +214,6 @@ class GlandContrastLoss(nn.Module):
 
             #cc = res.copy()
             gt_res = np.zeros(gt.shape, dtype=np.uint8)
-            #print(gt_num, pred_num, np.unique(gt_labeled), np.unique(pred_labeled))
             for i in range(0, gt_num):
                 i += 1
                 if res[gt_labeled == i].max() != 0:
@@ -644,10 +646,7 @@ class GlandContrastLoss(nn.Module):
         self.store_values['gt'] = []
 
 
-        print()
-        print(gt_seg.max())
-        print()
-        mask = self.segment_mask(gts=gt_seg.detach().cpu().numpy(), preds=pred_logits.detach().cpu().numpy(), op=self.op, out_size=(240, 240))
+        mask = self.segment_mask(gts=gt_seg.detach().cpu().numpy(), preds=pred_logits.detach().cpu().numpy(), op=self.op, out_size=(480, 480))
         mask = torch.tensor(mask, dtype=gt_seg.dtype, device=gt_seg.device)
 
 
