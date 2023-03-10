@@ -143,12 +143,15 @@ class GlandContrastLoss(nn.Module):
         results = []
         #pred
         res = np.zeros(gt.shape, dtype=np.uint8)
+
+        # based on pred glands
         for i in range(0, pred_num):
             i += 1
 
             # gt != 0 is gt gland
             # pred_labeled == i is the ith gland of pred
-            mask = (pred_labeled == i) & (gt != 0)
+            pred_labeled_i = pred_labeled == i
+            mask = (pred_labeled_i) & (gt != 0)
 
             # for each pixel of mask in corresponding gt img
             #print(gt_labeled[mask].shape[0], len(gt_labeled[mask]))
@@ -159,11 +162,16 @@ class GlandContrastLoss(nn.Module):
                 res[pred_labeled == i] = 1
                 continue
 
+            # one pred gland contains more than one gt glands
             if gt_labeled[mask].min() != gt_labeled[mask].max():
                 # more than 1 gt gland instances in corresponding
                 # gt image
                 res[pred_labeled == i] = 1
-                #cv2.imwrite('resP{}.png'.format(i), res)
+
+            else:
+                # corresponding gt gland area is less than 50%
+                if mask.sum() / pred_labeled_i.sum() < 0.5:
+                    res[pred_labeled == i] = 1
 
 
         #gt
@@ -172,7 +180,9 @@ class GlandContrastLoss(nn.Module):
         res = np.zeros(gt.shape, dtype=np.uint8)
         for i in range(0, gt_num):
             i += 1
-            mask = (gt_labeled == i) & (pred != 0)
+            gt_labeled_i = gt_labeled == i
+            #mask = (gt_labeled == i) & (pred != 0)
+            mask = gt_labeled_i & (pred != 0)
 
             if len(pred_labeled[mask]) == 0:
                 # no pred gland instance in corresponding
@@ -185,9 +195,13 @@ class GlandContrastLoss(nn.Module):
             if pred_labeled[mask].min() != pred_labeled[mask].max():
                 res[gt_labeled == i] = 1
                 #cv2.imwrite('resG{}.png'.format(i), res)
-            #finish = time.time()
-            #print('sum', finish - start)
 
+            else:
+                if mask.sum() / gt_labeled_i.sum() < 0.5:
+                    #print(mask.sum() / gt_labeled_i.sum(), 'ccccccccccc')
+                    #print(i, i, i, i)
+                    res[gt_labeled == i] = 1
+            #print(mask.sum() / (gt_labeled == i).sum(), 'cc111')
             #start = time.time()
             #for i in range(100):
             #    np.unique(test)
@@ -204,9 +218,8 @@ class GlandContrastLoss(nn.Module):
             #finish = time.time()
             #print('max min', finish - start)
         results.append(res)
+
         res = cv2.bitwise_or(results[0], results[1])
-        #print(results[0].max(), gt_num, '????')
-        #cv2.imwrite('a1.png', results[0] / results[0].max() * 255)
         if op == 'or':
             return res
 
@@ -288,7 +301,6 @@ class GlandContrastLoss(nn.Module):
         # assign the gt gland to the non-gland image
         candidate_mask[mask] = gt_seg[mask]
         mask1 = candidate_mask.sum(dim=(2, 3)) == 0
-        #print((mask.float() - mask1.float()).mean(), 'ccc')
 
         # randomly sample k elements in candidate_mask
         candidate_mask = candidate_mask + torch.randn(candidate_mask.shape, device=candidate_mask.device)
@@ -757,7 +769,6 @@ class GlandContrastLoss(nn.Module):
         #import sys; sys.exit()
 
 
-        #print(mask.shape, 'ccc', pred_logits.shape, gt_seg.shape)
         #pred_seg = pred_logits.argmax(dim=1)
         #print(pred_seg.shape)
         #print(mask.shape, gt_seg.shape)
@@ -779,7 +790,6 @@ class GlandContrastLoss(nn.Module):
 
 
 
-        #print(pred_seg.shape, 'cc')
         #pred_seg =
         #print(pred_seg.requires_grad)
         #print(pred_seg.shape)
