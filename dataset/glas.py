@@ -97,6 +97,14 @@ class Glas(Dataset):
             label[cnt == 1] = 2
 
             return label
+        elif self.image_set == 'train' and self.class_num == 2:
+            kernel = np.ones((3, 3), np.uint8)
+            label[label > 0] = 1
+            # prevent glands clustered together when resize the img to a smaller size
+            label = cv2.erode(label, kernel, iterations=1)
+
+            return label
+
         else:
             label[label > 0] = 1
             return label
