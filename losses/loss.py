@@ -288,8 +288,6 @@ class GlandContrastLoss(nn.Module):
 
         # masks of  xor_mask
 
-        print(candidate_mask.max())
-        assert candidate_mask.max() == 1
 
         batch_size = pred_logits.shape[0]
         logits_dim = pred_logits.shape[1]
@@ -686,7 +684,7 @@ class GlandContrastLoss(nn.Module):
             i.permute(1, 2, 0)
 
 
-    def forward(self, feats, pred_logits, gt_seg, queue=None, queue_ptr=None, neck=None):
+    def forward(self, feats, pred_logits, gt_seg, queue=None, queue_ptr=None):
 
 
         self.store_values = {}
@@ -697,14 +695,12 @@ class GlandContrastLoss(nn.Module):
 
 
 
-        dummy = torch.randn([feats.shape[0], 256, 480, 480], device=feats.device)
-        gland_feats, bg_feats = self.hard_sampling_even(dummy, gt_seg, mask)
+        #dummy = torch.randn([feats.shape[0], 256, 480, 480], device=feats.device)
+        gland_feats, bg_feats = self.hard_sampling_even(feats, gt_seg, mask)
 
         ####################################
         # save gt in tmp
 
-        #gland_feats = neck(gland_feats)
-        #bg_feats = neck(bg_feats)
 
         #print(gland_feats.shape, bg_feats.shape)
 
