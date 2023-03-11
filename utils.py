@@ -582,7 +582,7 @@ def data_loader(args, image_set):
             transforms.RandomApply(
                 transforms=[transforms.PhotoMetricDistortion()]
             ),
-            transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.95, pad_if_needed=True),
+            transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.90, pad_if_needed=True),
             transforms.ToTensor(),
             transforms.Normalize(settings.MEAN, settings.STD)
         ])
