@@ -71,7 +71,7 @@ def train(net, train_dataloader, val_loader, writer, args):
     cnt_loss_fn_dice = DiceLoss(class_weight=cnt_weight, ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
     #var_loss_fn = LossVariance()
 
-    contrasive_loss_fn = GlandContrastLoss(4)
+    contrasive_loss_fn = GlandContrastLoss(4, ignore_idx=train_dataloader.dataset.ignore_index)
 
     #loss_l2 = nn.MSELoss()
     #loss_seg = SegmentLevelLoss(op=args.op)
@@ -123,12 +123,35 @@ def train(net, train_dataloader, val_loader, writer, args):
     #    with_stack=True
     #) as p:
     #images, masks = next(train_iterloader)
+    vis_idx = 4
     train_t = time.time()
     for iter_idx, (images, masks, weight_maps) in enumerate(train_iterloader):
-        # images, masks = images, masks
 
-    # for iter_idx in range(1000000):
-        # iter_start = time.time()
+        if args.vis and iter_idx == vis_idx :
+
+            for idx, ii in enumerate(images.clone()):
+                ii = utils.to_img(ii.cpu()).numpy()
+                ii = cv2.resize(ii, (0, 0), fx=0.5, fy=0.5)
+                ii = cv2.imwrite('tmp/img_{}.jpg'.format(idx), ii)
+
+
+            for idx, ii in enumerate(masks.clone()):
+            #for idx, ii in enumerate(masks):
+                #print(torch.unique(ii))
+                ii = ii.cpu().numpy()
+                mm = ii == 255
+                #ii[i==255] = 0 ### ?????
+                ii[mm] = 0
+                ii = ii / (ii.max() + 1e-7) * 255
+                ii = cv2.imwrite('tmp/gt_{}.png'.format(idx), ii.astype('uint8'))
+                #print(idx + iter_idx * masks.shape[0])
+                #ii = cv2.imwrite('tmp/gt_{}.png'.format(idx + iter_idx * masks.shape[0]), ii.astype('uint8'))
+
+
+
+        #print(masks.max(), 'xiansu??', images.shape)
+
+
 
         data_time = time.time() - train_t
 
@@ -174,12 +197,87 @@ def train(net, train_dataloader, val_loader, writer, args):
                 loss = loss * weight_maps + 0.4 * loss_aux * weight_maps
 
                 #if iter_idx > 20000:
-                contrasive_loss, mask = contrasive_loss_fn(out, gland_preds, masks, queue=net.queue, queue_ptr=net.queue_ptr, neck=net.neck)
+
+
+
+                # mask is gt_seg
+                contrasive_loss, xor_mask = contrasive_loss_fn(out, gland_preds, masks, queue=net.queue, queue_ptr=net.queue_ptr, neck=net.neck)
+
+                if args.vis and iter_idx == vis_idx:
+                    print('save gland_preds.....')
+                    for idx, ii in enumerate(gland_preds.clone()):
+                        ii = ii.permute(1, 2, 0)
+                        ii = ii.argmax(dim=2)
+                        #print(ii.shape)
+                        #print(ii.max())
+                        #print(masks[idx].max())
+                        mm = masks[idx] == 255
+                        #cv2.imwrite('tmp/pred_c_{}.png'.format(idx), mm.cpu().numpy().astype('uint8') * 255)
+                        #print(mm.shape)
+                        ii = ii * 255
+                        ii[mm] = 0
+                        #ii = ii / (ii.max() + 1e-7) * 255
+                        #print(ii.max())
+                        ii = cv2.imwrite('tmp/pred_{}.png'.format(idx), ii.cpu().numpy())
+
+                    for idx, ii in enumerate(xor_mask.clone()):
+                        #print(ii.shape)
+                        #ii = ii.shape
+                        #print(torch.unique(ii))
+                        #print(ii.shape)
+                        ii = ii / (ii.max() + 1e-7) * 255
+
+                        cv2.imwrite('tmp/xor_{}.png'.format(idx), ii.cpu().numpy().astype('uint8'))
+
+                    #for idx, ii in enumerate(contrasive_loss_fn.store_values['gt'][0]):
+                    for hook_name in contrasive_loss_fn.store_values.keys():
+                    #for idx, ii in enumerate(contrasive_loss_fn.store_values['pred']):
+                        #print(ii.shape)
+                        for idx, ii in enumerate(contrasive_loss_fn.store_values[hook_name]):
+                            ii = ii.clone()
+
+                            if torch.is_tensor(ii):
+                                ii = ii.cpu().numpy()
+
+                            if ii.ndim == 3:
+                                ii = ii[0]
+
+
+                            #print('zuida', ii.max())
+                            if ii.max() != 0:
+                                #if idx == 8:
+                                    #print(hook_name, ii.max())
+                                ii = ii  / ii.max() * 255
+                            #print(ii.shape)
+                            #print(ii.shape)
+                            cv2.imwrite('tmp/{}_{}.png'.format(hook_name, idx), ii.astype('uint8'))
+
+                    #for idx, ii in enumerate(contrasive_loss_fn.store_values['pred'][0]):
+                    ###for idx, ii in enumerate(contrasive_loss_fn.store_values['gt']):
+                    #    #print(ii.shape)
+                    #    if torch.is_tensor(ii):
+                    #        ii = ii.cpu().numpy()
+
+                    #    #ii = ii[0]
+                    #    if ii.ndim == 3:
+                    #        ii = ii[0]
+
+                    #    ii = ii.copy()
+                    #    #print('zuida', ii.max())
+                    #    ii = ii / (ii.max() + 1e-7) * 255
+                    #    #print(ii.shape)
+                    #    cv2.imwrite('tmp/hook_xor_{}.png'.format(idx), ii.astype('uint8'))
+
+                    print('stopping...........')
+                    import sys; sys.exit()
+
+
+                #if vis_idx == iter_idx:
                 #print(loss.shape, mask.shape)
                 #import sys; sys.exit()
-                mask = torch.nn.functional.interpolate(mask.unsqueeze(1).float(), size=loss.shape[-2:]).squeeze(1)
+                xor_mask = torch.nn.functional.interpolate(xor_mask.unsqueeze(1).float(), size=loss.shape[-2:], mode='nearest').squeeze(1)
                 #print(mask.shape)
-                loss = loss + mask * loss
+                loss = loss + xor_mask * loss
 
 
                 #print(contrasive_loss)
@@ -376,6 +474,7 @@ def train(net, train_dataloader, val_loader, writer, args):
         if total_iter <= iter_idx:
             break
 
+    import sys; sys.exit()
 
 def evaluate(net, val_dataloader, args):
     net.eval()
@@ -686,6 +785,7 @@ if __name__ == '__main__':
     parser.add_argument('-branch', type=str, default='hybird', help='dataset name')
     parser.add_argument('-fp16', action='store_true', default=False, help='whether to use mixed precision training')
     parser.add_argument('-scale', type=float, default=1, help='min_lr for poly')
+    parser.add_argument('-vis', action='store_true', default=False, help='vis result of mid layer')
     args = parser.parse_args()
     print(args)
 
@@ -726,7 +826,7 @@ if __name__ == '__main__':
     #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Monday_16_January_2023_05h_11m_49s/iter_39999.pt'))
     # test_pretrain_crag_glas_rings_prostate
     # best pretrain
-    ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Tuesday_24_January_2023_01h_28m_51s/iter_39999.pt'
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Tuesday_24_January_2023_01h_28m_51s/iter_39999.pt'
 
     # test_pretrain_crag_glas_rings_prostate_with_upsampling
     #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Tuesday_24_January_2023_01h_24m_58s/iter_39999.pt'
@@ -770,7 +870,10 @@ if __name__ == '__main__':
     # ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_mocov2_bs64/latest.pth'
     # glas + crag + rings + sin + lizard + crc
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_rings_lizard_sin_crc_mocov2/latest.pth'
-    ckpt_path = 'best_pretrain/iter_39999.pt'
+    #ckpt_path = 'best_pretrain/iter_39999.pt'
+
+    # for debug
+    ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Wednesday_08_March_2023_23h_28m_07s/iter_39999.pt'
 
     # glas+crag+rings+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin_rings_densecl/latest.pth'
