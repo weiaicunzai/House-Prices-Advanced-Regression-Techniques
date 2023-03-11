@@ -384,6 +384,7 @@ class TG(nn.Module):
         super().__init__()
         self.backbone = backbone
         #self.graph_head_dim = 512
+        #self.graph_head_dim = 256
         self.graph_head_dim = 256
 
         self.project = nn.Sequential(
@@ -394,7 +395,7 @@ class TG(nn.Module):
 
         self.classifier = nn.Sequential(
             #nn.Conv2d(512 + 48, 256, 3, padding=1, bias=False),
-            nn.Conv2d(self.graph_head_dim + 48, 256, 3, padding=1, bias=False),
+            nn.Conv2d(256, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
             nn.Conv2d(256, num_classes, 1)
@@ -405,10 +406,15 @@ class TG(nn.Module):
         self.queue = nn.functional.normalize(self.queue, p=2, dim=2)
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
 
-        self.neck = nn.Sequential(
-            nn.Linear(2048, 2048),
+        #self.neck = nn.Sequential(
+        #    nn.Linear(2048, 2048),
+        #    nn.ReLU(inplace=True),
+        #    nn.Linear(2048, 256)
+        #)
+        self.out = nn.Sequential(
+            nn.Conv2d(self.graph_head_dim + 48, 256, 1, padding=1, bias=False),
+            nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
-            nn.Linear(2048, 256)
         )
 
         #self.queue = nn.Parameter(num_classes, 5000, 256)
@@ -489,10 +495,6 @@ class TG(nn.Module):
  #       )
 
 
-        #print(type(feats['out']))
-        #print(feats['out'])
-        #print(self.gland_head)
-        #print(sum(p.numel() for p in self.gland_head[1].parameters() if p.requires_grad))
         gland_feats = self.gland_head_project(feats['out'])
         gland = self.gland_head(gland_feats, queue=self.queue.detach()) # layer 4
 
@@ -506,17 +508,21 @@ class TG(nn.Module):
             mode='bilinear'
         )
 
-        gland = self.classifier(
-            torch.cat([gland, low_level_feat], dim=1)
-        )
+        #gland = self.classifier(
+        #    torch.cat([gland, low_level_feat], dim=1)
+        #)
 
-        gland = F.interpolate(
-            gland,
+        concat_inputs = torch.cat([gland, low_level_feat], dim=1)
+        concat_inputs = self.out(concat_inputs)
+        concat_inputs = F.interpolate(
+            concat_inputs,
             size=(H, W),
             #size=low_level_feat.shape[2:],
             align_corners=True,
             mode='bilinear'
         )
+
+        gland = self.classifier(concat_inputs)
 
         if not self.training:
             return gland
@@ -535,8 +541,8 @@ class TG(nn.Module):
         #else:
         #    return torch.cat([gland, cnt], dim=1)
         #else:
-        #return gland, aux
-        return gland, aux, feats['out']
+        return gland, aux, concat_inputs
+        #return gland, aux, feats['out']
 
 
 
