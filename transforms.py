@@ -414,7 +414,7 @@ class RandomCrop(object):
 
         if self.cat_max_ratio < 1.:
             # Repeat 10 times
-            for iidx in range(10):
+            for iidx in range(100):
                 bbox = crop(mask, i, j, h, w)
                 labels, cnt = np.unique(bbox, return_counts=True)
                 cnt = cnt[labels != self.seg_pad_value]
@@ -423,7 +423,10 @@ class RandomCrop(object):
                     break
                 i, j, h, w = self.get_params(img, self.crop_size)
 
-                if len(cnt) == 1 and iidx == 9:
+                #print(iidx, cnt, np.max(cnt) / np.sum(cnt), i, j)
+                if len(cnt) == 1 and iidx == 99:
+                    cv2.imwrite('img.jpg', img)
+                    cv2.imwrite('mask.png', mask)
                     raise ValueError('still no pixels of class???')
 
 
