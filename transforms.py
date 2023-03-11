@@ -382,6 +382,11 @@ class RandomCrop(object):
 
         #print(self.pad_if_needed)
         i, j, h, w = self.get_params(img, self.crop_size)
+
+
+
+
+
         # print(i,j,h,w)
 
         # for self.
@@ -407,23 +412,30 @@ class RandomCrop(object):
         #        i, j, h, w = self.get_params(img, self.crop_size)
 
 
-        # print(self.cat_max_ratio)
-        # import sys; sys.exit()
-        # print(type(img), i, j, i + h, j + w, img.shape)
+        if self.cat_max_ratio < 1.:
+            # Repeat 10 times
+            for iidx in range(10):
+                bbox = crop(mask, i, j, h, w)
+                labels, cnt = np.unique(bbox, return_counts=True)
+                cnt = cnt[labels != self.seg_pad_value]
+                if len(cnt) > 1 and 0.1 < np.max(cnt) / np.sum(
+                        cnt) < self.cat_max_ratio:
+                    break
+                i, j, h, w = self.get_params(img, self.crop_size)
+
+                if len(cnt) == 1 and iidx == 9:
+                    raise ValueError('still no pixels of class???')
+
+
         img = crop(img, i, j, h, w)
-        mask = crop(mask, i, j, h, w)
 
         if weight_map is not None:
             weight_map = crop(weight_map, i, j, h, w)
 
-        # print(img, 'ccc')
-        # print(mask, 'fff')
-        # print(type(img))
-        # import sys; sys.exit()
         if weight_map is not None:
-            return img, mask, weight_map
+            return img, bbox, weight_map
         else:
-            return img, mask
+            return img, bbox
 
 
 
