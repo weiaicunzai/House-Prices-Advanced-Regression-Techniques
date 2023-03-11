@@ -120,12 +120,8 @@ class Glas(Dataset):
         if self.image_set == 'train':
             index = index % len(self.images)
 
-        #print(len(self))
         image = self.images[index]
         label = self.labels[index]
-        #print(np.unique(label))
-        #label[label > 0] = 1
-
 
 
         if self.image_set != 'train':
