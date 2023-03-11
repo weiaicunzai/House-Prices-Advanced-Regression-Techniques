@@ -69,8 +69,6 @@ class GlandContrastLoss(nn.Module):
         #self.base_temperature = 0.1
         #self.infonce_loss_fn = losses.NTXentLoss(temperature=0.07)
         self.store_values = {
-            'pred':[],
-            'gt': []
         }
 
         self.ignore_idx = ignore_idx
@@ -103,7 +101,6 @@ class GlandContrastLoss(nn.Module):
         pred_labeled, pred_num = measure.label(pred, return_num=True, connectivity=1)
         gt_labeled, gt_num = measure.label(gt, return_num=True, connectivity=1)
 
-        self.store_values['pred'].append(pred_labeled)
 
         #gt_colors = assign_colors(gt_labeled, gt_num)
         #pred_colors = assign_colors(pred_labeled, pred_num)
@@ -240,8 +237,6 @@ class GlandContrastLoss(nn.Module):
 
 
             #print(pred_res.shape, 'pred_res.shape')
-            #self.store_values['pred'].append(pred_res)
-            #self.store_values['gt'].append(gt_res)
             res = cv2.bitwise_xor(pred_res, gt_res)
             return res
             #return pred_res
@@ -286,10 +281,15 @@ class GlandContrastLoss(nn.Module):
         return idx
 
 
-    def _sample_feats_even(self, pred_logits, candidate_mask, gt_seg):
+    def _sample_feats_even(self, pred_logits, candidate_mask, gt_seg, ignore_mask):
 
         assert candidate_mask.dim() == 4
         assert gt_seg.shape == candidate_mask.shape
+
+        # masks of  xor_mask
+
+        print(candidate_mask.max())
+        assert candidate_mask.max() == 1
 
         batch_size = pred_logits.shape[0]
         logits_dim = pred_logits.shape[1]
@@ -299,11 +299,22 @@ class GlandContrastLoss(nn.Module):
         mask = candidate_mask.sum(dim=(2, 3)) == 0
 
         # assign the gt gland to the non-gland image
-        candidate_mask[mask] = gt_seg[mask]
-        mask1 = candidate_mask.sum(dim=(2, 3)) == 0
+        candidate_mask[mask] = gt_seg[mask].long()
+
+        #if 'candidate_mask_gland' in self.store_values.keys():
+        #    self.store_values['candidate_mask_bg'] = [g for g in candidate_mask.clone()]
+        #else:
+        #    self.store_values['candidate_mask_gland'] = [g for g in candidate_mask.clone()]
+
 
         # randomly sample k elements in candidate_mask
-        candidate_mask = candidate_mask + torch.randn(candidate_mask.shape, device=candidate_mask.device)
+        candidate_mask = candidate_mask + torch.rand(candidate_mask.shape, device=candidate_mask.device)
+        candidate_mask[ignore_mask] = 0
+        #if 'candidate_mask_gland_rand' in self.store_values.keys():
+        #    self.store_values['candidate_mask_bg_rand'] = [g for g in candidate_mask.clone()]
+        #else:
+        #    self.store_values['candidate_mask_gland_rand'] = [g for g in candidate_mask.clone()]
+
         _, candidate_indices = candidate_mask.view(batch_size, -1).topk(k=self.num_nagative, dim=-1)
 
         pred_logits = pred_logits.permute(0, 2, 3, 1).view(batch_size, -1, logits_dim)
@@ -321,18 +332,39 @@ class GlandContrastLoss(nn.Module):
         # sampling feat from a 4D tensor
         assert pred_logits.dim() == 4
         batch_size, dim, h, w = pred_logits.shape
+        #h = 480
+        #w = 480
+
         labels = gt_seg.unsqueeze(1).float().clone()
         labels = torch.nn.functional.interpolate(labels, (h, w), mode='nearest').long()
+        #labels = gt_seg.unsqueeze(1)
 
         xor_mask = xor_mask.unsqueeze(1).float().clone()
         xor_mask = torch.nn.functional.interpolate(xor_mask, (h, w), mode='nearest').long()
 
-        gland_hard_mask = labels & xor_mask
-        gt_inv = ~labels
-        bg_hard_mask = gt_inv & xor_mask
 
-        gland_feats = self._sample_feats_even(pred_logits, gland_hard_mask, labels)
-        bg_feats = self._sample_feats_even(pred_logits, bg_hard_mask, labels)
+
+
+
+        #self.store_values['xor_mask'] = [xo for xo in xor_mask]
+        #self.store_values['labels'] = [la for la in labels.clone()]
+
+
+        gland_gt = labels == 1
+        gland_hard_mask = gland_gt * xor_mask
+
+        #self.store_values['gland_hard_mask'] = [gland for gland in gland_hard_mask.clone()]
+
+
+        bg_gt = labels == 0
+        bg_hard_mask = bg_gt * xor_mask
+
+        #self.store_values['bg_hard_mask'] = [gland for gland in bg_hard_mask.clone()]
+
+        ignore_mask = labels == self.ignore_idx
+
+        gland_feats = self._sample_feats_even(pred_logits, gland_hard_mask, labels == 1, ignore_mask)
+        bg_feats = self._sample_feats_even(pred_logits, bg_hard_mask, labels == 0, ignore_mask)
 
 
         return gland_feats, bg_feats
@@ -473,14 +505,15 @@ class GlandContrastLoss(nn.Module):
 
 
         numberator = torch.exp(logits_pos / self.temperature)
-        #print(numberator.shape, logits_neg.shape)
         denominator = torch.exp(logits_neg / self.temperature).sum(dim=1).unsqueeze(-1) + numberator
-
         log_exp = -torch.log((numberator / denominator)).sum(dim=1) / logits_pos.shape[-1]
-        #print(postive.shape[0], logits_pos.shape[-1])
-        #print(log_exp.shape)
 
-        #import sys; sys.exit()
+        #exp_pos = torch.exp(logits_pos / self.temperature)
+        #exp_neg = torch.exp(logits_neg / self.temperature)
+        #exp_neg_sum = exp_neg.sum(dim=-1)
+        #log_exp = -torch.log(exp_pos / (exp_neg_sum + exp_pos)).sum(dim=-1) / logits_pos.shape[-1]
+
+
         return log_exp.mean()
 
 
@@ -500,6 +533,8 @@ class GlandContrastLoss(nn.Module):
         assert dim == x_feat.shape[-1]
 
         assert x_feat.shape[0] == labels.shape[0]
+
+
 
         # 20000, 1
         # q_len * num_classes
@@ -526,7 +561,7 @@ class GlandContrastLoss(nn.Module):
         similirity_feat_queue = torch.div(torch.matmul(x_feat, queue_feat.T),
                                         self.temperature)
 
-        print(similirity_feat_queue.max())
+        #print(similirity_feat_queue.max())
         # torch.Size([12, 2, 10000])
         # print(similirity_feat_queue.shape)
         # print(queue_y.shape, feat_queue.shape)
@@ -654,29 +689,25 @@ class GlandContrastLoss(nn.Module):
     def forward(self, feats, pred_logits, gt_seg, queue=None, queue_ptr=None, neck=None):
 
 
-        self.store_values['pred'] = []
-        self.store_values['gt'] = []
+        self.store_values = {}
 
 
         mask = self.segment_mask(gts=gt_seg.detach().cpu().numpy(), preds=pred_logits.detach().cpu().numpy(), op=self.op, out_size=(480, 480))
         mask = torch.tensor(mask, dtype=gt_seg.dtype, device=gt_seg.device)
 
 
-        #return mask
 
-
-
-        #mask = pred_logits.argmax(dim=1)
-        #print(mask.shape)
-
-        gland_feats, bg_feats = self.hard_sampling_even(feats, gt_seg, mask)
+        dummy = torch.randn([feats.shape[0], 256, 480, 480], device=feats.device)
+        gland_feats, bg_feats = self.hard_sampling_even(dummy, gt_seg, mask)
 
         ####################################
         # save gt in tmp
 
-        gland_feats = neck(gland_feats)
-        bg_feats = neck(bg_feats)
+        #gland_feats = neck(gland_feats)
+        #bg_feats = neck(bg_feats)
+
         #print(gland_feats.shape, bg_feats.shape)
+
 
         # gland : 0
         # bg : 1
