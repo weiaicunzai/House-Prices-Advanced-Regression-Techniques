@@ -123,6 +123,7 @@ def train(net, train_dataloader, val_loader, writer, args):
     #    with_stack=True
     #) as p:
     #images, masks = next(train_iterloader)
+
     vis_idx = 4
     train_t = time.time()
     for iter_idx, (images, masks, weight_maps) in enumerate(train_iterloader):
@@ -201,7 +202,22 @@ def train(net, train_dataloader, val_loader, writer, args):
 
 
                 # mask is gt_seg
-                contrasive_loss, xor_mask = contrasive_loss_fn(out, gland_preds, masks, queue=net.queue, queue_ptr=net.queue_ptr, neck=net.neck)
+                contrasive_loss, xor_mask = contrasive_loss_fn(out, gland_preds, masks, queue=net.queue, queue_ptr=net.queue_ptr)
+
+                #_, xor_mask = contrasive_loss_fn(out, gland_preds, masks, queue=net.queue, queue_ptr=net.queue_ptr)
+
+                #xor_mask = torch.nn.functional.interpolate(xor_mask.unsqueeze(1).float(), size=loss.shape[-2:], mode='nearest').squeeze(1)
+                #print(xor_mask.max(), xor_mask.min())
+                #print(xor_mask.max(), xor_mask.min())
+                sup_loss = (loss + xor_mask * loss).mean()
+                #loss = sup_loss
+                #loss = sup_loss + contrasive_loss
+                #loss = sup_loss
+                #print(contrasve_loss)
+                #print(sup_loss)
+                loss = sup_loss +  contrasive_loss
+                #loss = loss.mean()
+                print(net.queue_ptr, loss.item(), optimizer.param_groups[0]['lr'])
 
                 if args.vis and iter_idx == vis_idx:
                     print('save gland_preds.....')
@@ -219,6 +235,25 @@ def train(net, train_dataloader, val_loader, writer, args):
                         #ii = ii / (ii.max() + 1e-7) * 255
                         #print(ii.max())
                         ii = cv2.imwrite('tmp/pred_{}.png'.format(idx), ii.cpu().numpy())
+
+                    for idx, ii in enumerate(gland_preds.clone()):
+                        ii = ii.permute(1, 2, 0)
+                        ii = ii.softmax(dim=2)
+                        #print(ii[3, 4])
+                        ii_min = ii.min(dim=2)[0]
+                        print(ii_min)
+                        ii = ii.max(dim=2)[0]
+                        mm = masks[idx] == 255
+                        mm = masks[idx] == 255
+                        print(ii.dtype)
+                        diff = (ii - ii_min) * 255
+                        ii = ii * 255
+                        diff[mm] = 0
+                        #print(diff.max(), diff.min())
+                        #print(ii)
+                        ii[mm] = 0
+                        ii = cv2.imwrite('tmp/uncertain_{}.png'.format(idx), ii.detach().cpu().numpy())
+                        ii = cv2.imwrite('tmp/diff_{}.png'.format(idx), diff.detach().cpu().numpy())
 
                     for idx, ii in enumerate(xor_mask.clone()):
                         #print(ii.shape)
@@ -272,16 +307,7 @@ def train(net, train_dataloader, val_loader, writer, args):
                     import sys; sys.exit()
 
 
-                #if vis_idx == iter_idx:
-                #print(loss.shape, mask.shape)
-                #import sys; sys.exit()
-                xor_mask = torch.nn.functional.interpolate(xor_mask.unsqueeze(1).float(), size=loss.shape[-2:], mode='nearest').squeeze(1)
-                #print(mask.shape)
-                loss = loss + xor_mask * loss
 
-
-                #print(contrasive_loss)
-                loss = loss.mean() + contrasive_loss
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -324,8 +350,11 @@ def train(net, train_dataloader, val_loader, writer, args):
 
         if (iter_idx + 1) % 50 == 0:
             print(('Training Iter: [{iter}/{total_iter}] '
-                    'Lr:{lr:0.6f} Loss:{loss:0.4f}, Iter time:{iter_time:0.4f}s Data loading time:{data_time:0.4f}s').format(
+                    # 'Lr:{lr:0.6f} Total Loss:{loss:0.4f}, Sup Loss:{sup_loss:0.4f}, Contrasive Loss: {con_loss:0.4f} Iter time:{iter_time:0.4f}s Data loading time:{data_time:0.4f}s').format(
+                    'Lr:{lr:0.6f} Total Loss:{loss:0.4f}, Iter time:{iter_time:0.4f}s Data loading time:{data_time:0.4f}s').format(
                 loss=loss.item(),
+                #sup_loss=sup_loss.item(),
+                #con_loss=contrasive_loss.item(),
                 iter=(iter_idx+1),
                 total_iter = total_iter,
                 lr=optimizer.param_groups[0]['lr'],
@@ -474,8 +503,6 @@ def train(net, train_dataloader, val_loader, writer, args):
         if total_iter <= iter_idx:
             break
 
-    import sys; sys.exit()
-
 def evaluate(net, val_dataloader, args):
     net.eval()
         # test_loss = 0.0
@@ -569,7 +596,6 @@ def evaluate(net, val_dataloader, args):
                 #pred = morph.remove_small_objects(pred, 100 * 9) # 0.87694807
 
                 pred[pred > 1] = 0
-
 
                 #print(pred.shape, np.unique(pred))
                 h, w = gt_seg_map.shape
@@ -873,7 +899,9 @@ if __name__ == '__main__':
     #ckpt_path = 'best_pretrain/iter_39999.pt'
 
     # for debug
-    ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Wednesday_08_March_2023_23h_28m_07s/iter_39999.pt'
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Wednesday_08_March_2023_23h_28m_07s/iter_39999.pt'
+    #ckpt_path = 'best_total_Dice_0.8844_iter_5999.pt'
+    ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Sunday_12_March_2023_18h_52m_04s/iter_39999.pt'
 
     # glas+crag+rings+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin_rings_densecl/latest.pth'
