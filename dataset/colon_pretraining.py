@@ -8,7 +8,6 @@ import cv2
 import torch
 from torch.utils.data import Dataset
 import torchvision
-import lmdb
 
 import sys
 sys.path.append(os.getcwd())
