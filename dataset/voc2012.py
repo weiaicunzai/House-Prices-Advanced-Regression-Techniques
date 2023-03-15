@@ -4,7 +4,6 @@ import os
 import cv2
 import pickle
 import numpy as np
-import lmdb
 from torch.utils.data import Dataset
 import torch
 
