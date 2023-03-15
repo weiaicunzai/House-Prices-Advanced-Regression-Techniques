@@ -48,6 +48,6 @@ res1
 test_time_per_img
 x.py
 save_tmp
-test_*
 *.pth
 *.pt
+test_*/
