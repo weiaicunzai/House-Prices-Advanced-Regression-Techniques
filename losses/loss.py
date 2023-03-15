@@ -12,6 +12,7 @@ from skimage import measure
 import numpy as np
 import cv2
 
+import time
 
 def connected_components(image: torch.Tensor, num_iterations: int = 100) -> torch.Tensor:
     r"""Computes the Connected-component labelling (CCL) algorithm.
@@ -156,19 +157,24 @@ class GlandContrastLoss(nn.Module):
                 # no gt gland instance in corresponding
                 # location of gt image
 
-                res[pred_labeled == i] = 1
+                #res[pred_labeled == i] = 1
+                res[pred_labeled_i] = 1
                 continue
 
             # one pred gland contains more than one gt glands
             if gt_labeled[mask].min() != gt_labeled[mask].max():
                 # more than 1 gt gland instances in corresponding
                 # gt image
-                res[pred_labeled == i] = 1
+                #res[pred_labeled == i] = 1
+                res[pred_labeled_i] = 1
 
             else:
                 # corresponding gt gland area is less than 50%
                 if mask.sum() / pred_labeled_i.sum() < 0.5:
-                    res[pred_labeled == i] = 1
+                    #res[pred_labeled == i] = 1
+                    res[pred_labeled_i] = 1
+                    #pred_labeled_i_xor = np.logical_xor(pred_labeled_i, mask)
+                    #res[pred_labeled_i_xor] = 1
 
 
         #gt
@@ -185,19 +191,22 @@ class GlandContrastLoss(nn.Module):
                 # no pred gland instance in corresponding
                 # predicted image
 
-                res[gt_labeled == i] = 1
+                #res[gt_labeled == i] = 1
+                res[gt_labeled_i] = 1
                 #cv2.imwrite('resG{}.png'.format(i), res)
                 continue
 
             if pred_labeled[mask].min() != pred_labeled[mask].max():
-                res[gt_labeled == i] = 1
+                #res[gt_labeled == i] = 1
+                res[gt_labeled_i] = 1
                 #cv2.imwrite('resG{}.png'.format(i), res)
 
             else:
                 if mask.sum() / gt_labeled_i.sum() < 0.5:
                     #print(mask.sum() / gt_labeled_i.sum(), 'ccccccccccc')
                     #print(i, i, i, i)
-                    res[gt_labeled == i] = 1
+                    #res[gt_labeled == i] = 1
+                    res[gt_labeled_i] = 1
             #print(mask.sum() / (gt_labeled == i).sum(), 'cc111')
             #start = time.time()
             #for i in range(100):
@@ -308,12 +317,16 @@ class GlandContrastLoss(nn.Module):
         # randomly sample k elements in candidate_mask
         candidate_mask = candidate_mask + torch.rand(candidate_mask.shape, device=candidate_mask.device)
         candidate_mask[ignore_mask] = 0
+        #print(candidate_mask.shape)
         #if 'candidate_mask_gland_rand' in self.store_values.keys():
         #    self.store_values['candidate_mask_bg_rand'] = [g for g in candidate_mask.clone()]
         #else:
         #    self.store_values['candidate_mask_gland_rand'] = [g for g in candidate_mask.clone()]
 
         _, candidate_indices = candidate_mask.view(batch_size, -1).topk(k=self.num_nagative, dim=-1)
+        #[8, 1, 122, 122],  [8, 256, 122, 122]
+        #print(candidate_mask.shape, pred_logits.shape)
+
 
         pred_logits = pred_logits.permute(0, 2, 3, 1).view(batch_size, -1, logits_dim)
         candidate_indices = candidate_indices.unsqueeze(-1).expand(-1, -1, pred_logits.shape[-1])
@@ -349,14 +362,22 @@ class GlandContrastLoss(nn.Module):
 
 
         gland_gt = labels == 1
+
+        #values = torch.amax(gland_gt, dim=(-1, -2))
+        #assert values.sum() == gland_gt.shape[0]
+
+
         gland_hard_mask = gland_gt * xor_mask
 
         #self.store_values['gland_hard_mask'] = [gland for gland in gland_hard_mask.clone()]
 
 
         bg_gt = labels == 0
+
         bg_hard_mask = bg_gt * xor_mask
 
+        #values = torch.amax(bg_hard_mask, dim=(-1, -2))
+        #assert values.sum() == bg_hard_mask.shape[0]
         #self.store_values['bg_hard_mask'] = [gland for gland in bg_hard_mask.clone()]
 
         ignore_mask = labels == self.ignore_idx
@@ -493,6 +514,13 @@ class GlandContrastLoss(nn.Module):
 
    #     pos_gland = torch.einsum('n')
 
+    def infonce(self, logits_pos, logits_neg):
+        numberator = torch.exp(logits_pos / self.temperature)
+        denominator = torch.exp(logits_neg / self.temperature).sum(dim=1).unsqueeze(-1) + numberator
+        log_exp = -torch.log((numberator / denominator)).sum(dim=1) / logits_pos.shape[-1]
+
+        return log_exp.mean()
+
     def contrasive_single_class(self, anchor, postive, negative):
         #print(anchor.shape, postive.T.shape)
 
@@ -502,17 +530,19 @@ class GlandContrastLoss(nn.Module):
         logits_neg = torch.einsum('nc, ck->nk', [anchor, negative.T])
 
 
-        numberator = torch.exp(logits_pos / self.temperature)
-        denominator = torch.exp(logits_neg / self.temperature).sum(dim=1).unsqueeze(-1) + numberator
-        log_exp = -torch.log((numberator / denominator)).sum(dim=1) / logits_pos.shape[-1]
+        #numberator = torch.exp(logits_pos / self.temperature)
+        #denominator = torch.exp(logits_neg / self.temperature).sum(dim=1).unsqueeze(-1) + numberator
+        #log_exp = -torch.log((numberator / denominator)).sum(dim=1) / logits_pos.shape[-1]
 
         #exp_pos = torch.exp(logits_pos / self.temperature)
         #exp_neg = torch.exp(logits_neg / self.temperature)
         #exp_neg_sum = exp_neg.sum(dim=-1)
         #log_exp = -torch.log(exp_pos / (exp_neg_sum + exp_pos)).sum(dim=-1) / logits_pos.shape[-1]
 
+        return self.infonce(logits_pos, logits_neg)
 
-        return log_exp.mean()
+
+        #return log_exp.mean()
 
 
 
@@ -568,7 +598,7 @@ class GlandContrastLoss(nn.Module):
         logits = (similirity_feat_queue - logits_max.detach())
 
         neg_mask = 1 - mask
-        #print(neg_mask)
+        #print(neg_maamk)
 
         #gland_feats = gland_feats.view(-1, gland_feats.shape[-1])
         #bg_feats = bg_feats.view(-1, bg_feats.shape[-1])
@@ -684,19 +714,155 @@ class GlandContrastLoss(nn.Module):
             i.permute(1, 2, 0)
 
 
+    def cal_uncertain_mask(self, pred_logits, mask):
+        pred_probs = pred_logits.softmax(dim=1)
+        diff = torch.abs(pred_probs[:, 0, :, :] - pred_probs[:, 1, :, :])
+        out = torch.exp(- 5 * diff ** 2)
+
+        out = out * mask
+
+        return out
+
+
+    def compute_sample_weight(self, gt_seg, uncertain_mask, class_id):
+
+        gt_mask = gt_seg == class_id
+        object_hard_mask = gt_mask * uncertain_mask
+
+        #object_mask = object_hard_mask
+        weight_mask = object_hard_mask.sum(dim=(-1, -2)) == 0
+
+        #print(object_hard_mask)
+        object_hard_mask[weight_mask] = gt_mask[weight_mask].float()
+        #print(object_hard_mask, '.....')
+
+        ignore_mask = gt_seg == self.ignore_idx
+
+        #weight = object_hard_mask * ignore_mask
+        object_hard_mask[ignore_mask] = 0
+
+
+        return object_hard_mask
+
+
+    def indices_to_points(self, indices, H, W):
+        #x =
+        #print(indices.dtype)
+        row = torch.div(indices, H, rounding_mode='trunc') / (H - 1)
+        col = indices % W / (W - 1)
+        #print('indices', indices)
+        #print('row', row)
+        #print('col', col)
+
+        xy = torch.stack([col, row], dim=-1)
+        #print(xy * 8)
+
+        return xy
+
+    def denormalize(self, grid):
+        """Denormalize input grid from range [0, 1] to [-1, 1]
+
+        Args:
+            grid (torch.Tensor): The grid to be denormalize, range [0, 1].
+
+        Returns:
+            torch.Tensor: Denormalized grid, range [-1, 1].
+        """
+
+        return grid * 2.0 - 1.0
+
+    def point_sample(self, feats, points, align_corners):
+
+        add_dim = False
+        #print(feats.shape, points.shape, 'befiore')
+        if points.dim() == 3:
+            add_dim = True
+            points = points.unsqueeze(2)
+            output = F.grid_sample(
+                feats, self.denormalize(points), align_corners=align_corners)
+        if add_dim:
+            output = output.squeeze(3)
+        #print(feats.shape, points.shape, output.shape, 'after')
+        return output
+
+    def get_points_train(self, gt_seg, uncertain_mask):
+
+        batch_size, H, W = gt_seg.shape
+
+        assert gt_seg.shape == uncertain_mask.shape
+
+        # cal sample weight
+        gland_weight = self.compute_sample_weight(gt_seg, uncertain_mask, class_id=1)
+        bg_weight = self.compute_sample_weight(gt_seg, uncertain_mask, class_id=0)
+
+        # sample accordint to weights
+        gland_indices = torch.multinomial(gland_weight.view(batch_size, -1), self.num_nagative, replacement=False)
+        bg_indices = torch.multinomial(bg_weight.view(batch_size, -1), self.num_nagative, replacement=False)
+
+
+        # convert indices to points
+        gland_points = self.indices_to_points(gland_indices, H, W)
+        bg_indices = self.indices_to_points(bg_indices, H, W)
+
+        return gland_points, bg_indices
+
+
+        # convert gland_indices to point_coords [0, 1]
+
+
+        # gland_gt = labels == 1
+        # gland_hard_mask = gland_gt * uncertain_mask
+
+        # bg_gt = labels == 0
+        # bg_hard_mask = bg_gt * uncertain_mask
+
+
+        # mask = candidate_mask.sum(dim=(2, 3)) == 0
+
+        # assign the gt gland to the non-gland image
+        # candidate_mask[mask] = gt_seg[mask].long()
+
+        #if 'candidate_mask_gland' in self.store_values.keys():
+        #    self.store_values['candidate_mask_bg'] = [g for g in candidate_mask.clone()]
+        #else:
+        #    self.store_values['candidate_mask_gland'] = [g for g in candidate_mask.clone()]
+
+
+        # randomly sample k elements in candidate_mask
+        # candidate_mask = candidate_mask + torch.rand(candidate_mask.shape, device=candidate_mask.device)
+        # candidate_mask[ignore_mask] = 0
+
+
+
+
     def forward(self, feats, pred_logits, gt_seg, queue=None, queue_ptr=None):
 
 
         self.store_values = {}
 
 
-        mask = self.segment_mask(gts=gt_seg.detach().cpu().numpy(), preds=pred_logits.detach().cpu().numpy(), op=self.op, out_size=(480, 480))
-        mask = torch.tensor(mask, dtype=gt_seg.dtype, device=gt_seg.device)
+        with torch.no_grad():
+            mask = self.segment_mask(gts=gt_seg.detach().cpu().numpy(), preds=pred_logits.detach().cpu().numpy(), op=self.op, out_size=(480, 480))
+            mask = torch.tensor(mask, dtype=gt_seg.dtype, device=gt_seg.device)
+            uncertain_mask = self.cal_uncertain_mask(pred_logits, mask)
+            gland_points, bg_points = self.get_points_train(gt_seg, uncertain_mask)
+
+        #print(feats.shape)
+
+        gland_feats = self.point_sample(feats, gland_points, align_corners=True)
+        gland_feats = gland_feats.permute(0, 2, 1)
+
+        bg_feats = self.point_sample(feats, bg_points, align_corners=True)
+        bg_feats = bg_feats.permute(0, 2, 1)
+        #print(gland_feats.shape, bg_feats.shape, self.num_nagative)
+
+
 
 
 
         #dummy = torch.randn([feats.shape[0], 256, 480, 480], device=feats.device)
-        gland_feats, bg_feats = self.hard_sampling_even(feats, gt_seg, mask)
+        #gland_feats, bg_feats = self.hard_sampling_even(feats, gt_seg, mask)
+        #return 0, mask
 
         ####################################
         # save gt in tmp
@@ -755,8 +921,12 @@ class GlandContrastLoss(nn.Module):
         #loss = self.infonce_loss_fn(feats, labels)
 
 
-        gland_feats = torch.nn.functional.normalize(gland_feats.view(-1, gland_feats.shape[-1]), dim=1, p=2)
-        bg_feats = torch.nn.functional.normalize(bg_feats.view(-1, bg_feats.shape[-1]), dim=1, p=2)
+        #print(gland_feats.shape)
+        gland_feats = torch.nn.functional.normalize(gland_feats.contiguous().view(-1, gland_feats.shape[-1]), dim=1, p=2)
+        #print(gland_feats.shape)
+        #print(gland_feats.shape, 'after')
+        bg_feats = torch.nn.functional.normalize(bg_feats.contiguous().view(-1, bg_feats.shape[-1]), dim=1, p=2)
+        #print(bg_feats.shape)
 
         gland_queue = queue[0]
         bg_queue = queue[1]
@@ -772,6 +942,7 @@ class GlandContrastLoss(nn.Module):
         gland_loss = self.contrasive_single_class(anchor=gland_feats, postive=gland_queue.detach(), negative=bg_queue.detach())
         bg_loss = self.contrasive_single_class(anchor=bg_feats, postive=bg_queue.detach(), negative=gland_feats.detach())
 
+        #return 0, uncertain_mask
         #print(bg_loss)
         #print((gland_loss + bg_loss) / 2)
         #import sys; sys.exit()
@@ -790,7 +961,8 @@ class GlandContrastLoss(nn.Module):
 
         loss = (gland_loss + bg_loss) / 2
 
-        self._dequeue_and_enqueue(gland_feats.detach(), bg_feats.detach(), queue, queue_ptr)
+        with torch.no_grad():
+            self._dequeue_and_enqueue(gland_feats.detach(), bg_feats.detach(), queue, queue_ptr)
 
         #print(loss)
         #import sys; sys.exit()
@@ -841,7 +1013,8 @@ class GlandContrastLoss(nn.Module):
         #print(pred_seg.shape)
         #print(pred_seg)
 
-        return loss, mask
+        #return loss, mask
+        return loss, uncertain_mask
 
 #loss = GlandContrastLoss(grid_size=28, num_nagative=2)
 #
