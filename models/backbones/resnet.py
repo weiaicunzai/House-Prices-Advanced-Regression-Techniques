@@ -631,8 +631,6 @@ class ResNet(nn.Module):
         x = self.bn1(x)
         x = self.act1(x)
 
-        #out.append(x)
-
         x = self.maxpool(x)
 
         #if self.grad_checkpointing and not torch.jit.is_scripting():
@@ -640,17 +638,14 @@ class ResNet(nn.Module):
         #else:
         x1 = self.layer1(x)
         out['low_level'] = x1
-        #out.append(x1)
 
         x2 = self.layer2(x1)
-        #out.append(x2)
+        out['layer2'] = x2
 
         x3 = self.layer3(x2)
-        #out.append(x3)
         out['aux'] = x3
 
         x4 = self.layer4(x3)
-        #out.append(x4)
         out['out'] = x4
 
         return out
