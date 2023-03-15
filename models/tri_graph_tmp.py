@@ -300,9 +300,9 @@ class GCU(nn.Module):
         graph = self.gcns(graph)
 
         # graph : [16, 256, 8][B, dim, num_nodes]
-        if queue is not None:
-            attn = self.attention(graph, queue)
-            graph = graph + attn
+        #if queue is not None:
+        #    attn = self.attention(graph, queue)
+        #    graph = graph + attn
 
         graph = graph.bmm(assign)
 
@@ -401,8 +401,9 @@ class TG(nn.Module):
             nn.Conv2d(256, num_classes, 1)
         )
 
-        q_len = 1000
+        q_len = 5000
         self.register_buffer("queue", torch.randn(num_classes, q_len, 256))
+        #self.register_buffer("queue", torch.randn(num_classes, q_len, 2))
         self.queue = nn.functional.normalize(self.queue, p=2, dim=2)
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
 
@@ -473,33 +474,14 @@ class TG(nn.Module):
 
         B, C, H, W = x.shape
 
-        #assert int(H) % 32 == 0
-        #assert int(W) % 32 == 0
 
         feats = self.backbone(x)
         low_level_feat = self.project(feats['low_level'])
-
-        #print(feats['out'].shape)
-        #import sys; sys.exit()
-
-
-        #out =
-
- #       out = self.out()
- #       out = F.interpolate(
- #           out,
- #           #size=(H, W),
- #           size=(int(H / 4), int(W / 4)),
- #           align_corners=True,
- #           mode='bilinear'
- #       )
-
 
         gland_feats = self.gland_head_project(feats['out'])
         gland = self.gland_head(gland_feats, queue=self.queue.detach()) # layer 4
 
 
-        #output = self.head(feats[-1]) # layer 4
         gland = F.interpolate(
             gland,
             #size=(H, W),
@@ -507,28 +489,48 @@ class TG(nn.Module):
             align_corners=True,
             mode='bilinear'
         )
+        #concat_inputs = torch.cat([gland, low_level_feat], dim=1)
+        gland = torch.cat([gland, low_level_feat], dim=1)
 
-        #gland = self.classifier(
-        #    torch.cat([gland, low_level_feat], dim=1)
-        #)
 
-        concat_inputs = torch.cat([gland, low_level_feat], dim=1)
-        concat_inputs = self.out(concat_inputs)
-        concat_inputs = F.interpolate(
-            concat_inputs,
+
+
+
+        #concat_inputs = self.out(concat_inputs)
+        gland = self.out(gland)
+
+        sample = gland
+
+
+        #concat_inputs = F.interpolate(
+
+       #classify before interploate
+        #gland = self.classifier(output)
+        #sampler = gland
+        gland = self.classifier(gland)
+
+        # output this value......
+        gland = F.interpolate(
+            #concat_inputs,
+            gland,
             size=(H, W),
             #size=low_level_feat.shape[2:],
             align_corners=True,
             mode='bilinear'
         )
 
-        gland = self.classifier(concat_inputs)
+
+
+        #gland = self.classifier(concat_inputs)
+
+
+
+
 
         if not self.training:
             return gland
 
         aux = self.aux_head(feats['aux'])
-        #cnt = self.cnt_head(feats[-1])
         aux = F.interpolate(
             aux,
             size=(H, W),
@@ -536,13 +538,10 @@ class TG(nn.Module):
             mode='bilinear'
         )
 
-        #if self.training:
-        #    return gland, cnt
-        #else:
-        #    return torch.cat([gland, cnt], dim=1)
-        #else:
-        return gland, aux, concat_inputs
-        #return gland, aux, feats['out']
+        #print(sample.shape)
+
+
+        return gland, aux, sample
 
 
 
