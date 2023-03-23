@@ -20,12 +20,9 @@ import cv2
 import transforms
 import utils
 from conf import settings
-from dataset.camvid import CamVid
 from dataset.voc2012 import VOC2012Aug
-#from dataset.camvid_lmdb import CamVid
 from lr_scheduler import PolynomialLR, WarmUpLR, WarmUpWrapper
 from metric import eval_metrics, gland_accuracy_object_level
-#from loss import SegmentLevelLoss, LossVariance
 from dataloader import IterLoader
 import test_aug
 from losses import DiceLoss, WeightedLossWarpper, GlandContrastLoss
@@ -71,7 +68,7 @@ def train(net, train_dataloader, val_loader, writer, args):
     cnt_loss_fn_dice = DiceLoss(class_weight=cnt_weight, ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
     #var_loss_fn = LossVariance()
 
-    contrasive_loss_fn = GlandContrastLoss(4, ignore_idx=train_dataloader.dataset.ignore_index)
+    contrasive_loss_fn = GlandContrastLoss(8, ignore_idx=train_dataloader.dataset.ignore_index, temperature=0.07)
 
     #loss_l2 = nn.MSELoss()
     #loss_seg = SegmentLevelLoss(op=args.op)
@@ -127,6 +124,7 @@ def train(net, train_dataloader, val_loader, writer, args):
     vis_idx = 4
     train_t = time.time()
     for iter_idx, (images, masks, weight_maps) in enumerate(train_iterloader):
+
 
         if args.vis and iter_idx == vis_idx :
 
@@ -202,22 +200,12 @@ def train(net, train_dataloader, val_loader, writer, args):
 
 
                 # mask is gt_seg
-                contrasive_loss, xor_mask = contrasive_loss_fn(out, gland_preds, masks, queue=net.queue, queue_ptr=net.queue_ptr)
+                #contrasive_loss, xor_mask = contrasive_loss_fn(out, gland_preds, masks, queue=net.queue, queue_ptr=net.queue_ptr, fcs=net.fcs)
 
-                #_, xor_mask = contrasive_loss_fn(out, gland_preds, masks, queue=net.queue, queue_ptr=net.queue_ptr)
-
-                #xor_mask = torch.nn.functional.interpolate(xor_mask.unsqueeze(1).float(), size=loss.shape[-2:], mode='nearest').squeeze(1)
-                #print(xor_mask.max(), xor_mask.min())
-                #print(xor_mask.max(), xor_mask.min())
-                sup_loss = (loss + xor_mask * loss).mean()
-                #loss = sup_loss
-                #loss = sup_loss + contrasive_loss
-                #loss = sup_loss
-                #print(contrasve_loss)
-                #print(sup_loss)
-                loss = sup_loss +  contrasive_loss
-                #loss = loss.mean()
-                print(net.queue_ptr, loss.item(), optimizer.param_groups[0]['lr'])
+                #sup_loss = (loss + xor_mask * loss).mean()
+                #loss = sup_loss + args.alpha * contrasive_loss
+                loss = loss.mean()
+                #print(net.queue_ptr, loss.item(), optimizer.param_groups[0]['lr'])
 
                 if args.vis and iter_idx == vis_idx:
                     print('save gland_preds.....')
@@ -328,7 +316,6 @@ def train(net, train_dataloader, val_loader, writer, args):
         #    torch.save(masks, 'masks.pt')
         #    torch.save(cnt_masks, 'cnt_masks.pt')
         #    torch.save(gland_masks, 'gland_masks.pt')
-        #    import sys; sys.exit()
         #if args.poly:
             #train_scheduler.step()
         #p.step()
@@ -383,11 +370,19 @@ def train(net, train_dataloader, val_loader, writer, args):
 
             net.eval()
             print('evaluating.........')
-            total, testA, testB = evaluate(net, val_loader, args)
+            #total, testA, testB = evaluate(net, val_loader, args)
+            results = evaluate(net, val_loader, args)
 
-            print('total: F1 {}, Dice:{}, Haus:{}'.format(*total))
-            print('testA: F1 {}, Dice:{}, Haus:{}'.format(*testA))
-            print('testB: F1 {}, Dice:{}, Haus:{}'.format(*testB))
+            #print('total: F1 {}, Dice:{}, Haus:{}'.format(*total))
+
+            for key, values in results.items():
+                print('{}: F1 {}, Dice:{}, Haus:{}'.format(key, *values))
+
+
+            #if args.dataset == 'Glas':
+
+            #    print('testA: F1 {}, Dice:{}, Haus:{}'.format(*testA))
+            #    print('testB: F1 {}, Dice:{}, Haus:{}'.format(*testB))
 
             #if best[0] <
             # if best['testA_F1'] < testA[0]:
@@ -411,15 +406,17 @@ def train(net, train_dataloader, val_loader, writer, args):
 
             utils.visualize_metric(writer,
                 #['total_F1', 'total_Dice', 'total_Haus'], total, iter_idx)
-                total_metrics, total, iter_idx)
+                #total_metrics, total, iter_idx)
+                total_metrics, results['total'], iter_idx)
 
-            utils.visualize_metric(writer,
-                #['testA_F1', 'testA_Dice', 'testA_Haus'], testA, iter_idx)
-                testA_metrics, testA, iter_idx)
+            if args.dataset == 'Glas':
+                utils.visualize_metric(writer,
+                    #['testA_F1', 'testA_Dice', 'testA_Haus'], testA, iter_idx)
+                    testA_metrics, results['testA'], iter_idx)
 
-            utils.visualize_metric(writer,
-                #['testB_F1', 'testB_Dice', 'testB_Haus'], testB, iter_idx)
-                testB_metrics, testB, iter_idx)
+                utils.visualize_metric(writer,
+                    #['testB_F1', 'testB_Dice', 'testB_Haus'], testB, iter_idx)
+                    testB_metrics, results['testB'], iter_idx)
 
 
             #print(('Training Epoch:{epoch} [{trained_samples}/{total_samples}] '
@@ -488,11 +485,13 @@ def train(net, train_dataloader, val_loader, writer, args):
 
             ckpt_manager.save_ckp_iter(net, iter_idx)
             ckpt_manager.save_best(net, total_metrics,
-                total, iter_idx)
-            ckpt_manager.save_best(net, testA_metrics,
-                testA, iter_idx)
-            ckpt_manager.save_best(net, testB_metrics,
-                testB, iter_idx)
+                results['total'], iter_idx)
+
+            if args.dataset == 'Glas':
+                ckpt_manager.save_best(net, testA_metrics,
+                    results['testA'], iter_idx)
+                ckpt_manager.save_best(net, testB_metrics,
+                    results['testB'], iter_idx)
 
             print('best value:', ckpt_manager.best_value)
             net.train()
@@ -518,6 +517,8 @@ def evaluate(net, val_dataloader, args):
 
     count_A = 0
     count_B = 0
+
+    # crag_res = 0
 
     # testA = {
     #     "F1" : 0,
@@ -550,9 +551,12 @@ def evaluate(net, val_dataloader, args):
     #ig_idx = valid_dataset.ignore_index
     count = 0
     #sampler = _sampler.OHEMPixelSampler(ignore_index=val_dataloader.dataset.ignore_index, min_kept=10000)
+    out ={}
+
     with torch.no_grad():
         for img_metas in tqdm(val_dataloader):
             for img_meta in img_metas:
+
 
 
                 imgs = img_meta['imgs']
@@ -586,10 +590,19 @@ def evaluate(net, val_dataloader, args):
                 #pred = morph.remove_small_objects(pred, 100 * 7) # 0.87812435
                 #pred = morph.remove_small_objects(pred, 100 * 8) # 0.88134712
                 #pred = morph.remove_small_objects(pred, 100 * 9) # 0.88131605
-                pred = morph.remove_small_objects(pred, 100 * 8 + 50) # 0.88219517
+                #pred = morph.remove_small_objects(pred, 100 * 8 + 50) # 0.88219517
                 # pred = morph.remove_small_objects(pred, 100 * 8 + 50) # 0.88219517
                 #                                                         0.88228165
 
+                #img_name = img_meta['img_name']
+                #if 'testA' in img_name:
+                    #pred = morph.remove_small_objects(pred, 100 * 8 + 50) # 0.88219517
+                    #pred = morph.remove_small_objects(pred, 100 * 12 + 50)
+                pred = morph.remove_small_objects(pred, 100 * 8 + 50)
+
+                #if 'testB' in img_name:
+                #    #pred = morph.remove_small_objects(pred, 100 * 14 + 50) # 0.88219517
+                #    pred = morph.remove_small_objects(pred, 100 * 8 + 50) # 0.88219517
                 # multi scale
                 #pred = morph.remove_small_objects(pred, 100 * 8 + 50) #  0.87709376
                 #pred = morph.remove_small_objects(pred, 100 * 7) # 0.87236826
@@ -597,22 +610,17 @@ def evaluate(net, val_dataloader, args):
 
                 pred[pred > 1] = 0
 
-                #print(pred.shape, np.unique(pred))
                 h, w = gt_seg_map.shape
                 pred = cv2.resize(pred.astype('uint8'), (w, h), interpolation=cv2.INTER_NEAREST)
 
                 img_name = img_meta['img_name']
-                #print(img_name)
 
-#0.88351788
-#0.88308627
                 #if 'testA_39' in img_name:
                 #    #print(img_name)
                 #    assert len(imgs) == 1
                 #    #torch.save(imgs[0], 'tmp/testA_39_input.pt')
                 #    #torch.save(seg_logit, 'tmp/testA_39_output.pt')
                 #    cv2.imwrite('{}_fff.png'.format('testA_39'), pred)
-                #    import sys; sys.exit()
                 #print(torch.unique(gt_seg_map))
 
                 #gland = seg_logit[:, :2, :, :]
@@ -645,7 +653,6 @@ def evaluate(net, val_dataloader, args):
                 #pred =
                 #print(pred.shape,  gt_seg_map.shape)
                 #print(np.unique(pred))
-                #import sys; sys.exit()
 
 
 
@@ -658,38 +665,54 @@ def evaluate(net, val_dataloader, args):
                 _, _, F1, dice, _, haus = gland_accuracy_object_level(pred, gt_seg_map)
                 #print(F1, dice, haus)
                 #t4 = time.time()
-                #import sys; sys.exit()
                 #print(count, F1, dice, haus)
                 #if 'testA_39' in img_name:
                     #print(F1, dice, haus)
-                    #import sys; sys.exit()
                 #print(img_name, F1, dice, haus)
                 #print(F1, dice, haus)
                 #print(t4 - t3, 'gland_acc time')
-                #import sys; sys.exit()
                 #print()
                 #print(count, F1, dice, haus)
 
                 #if count > 10:
-                    #import sys; sys.exit()
 
                 res = np.array([F1, dice, haus])
 
 
-                if 'testA' in img_name:
-                    count_A += 1
-                    testA += res
+                count += 1
+                total += res
 
-                if 'testB' in img_name:
-                    count_B += 1
-                    testB += res
 
-    total = (testA + testB) / (count_A + count_B)
+                if args.dataset == 'Glas':
+                    if 'testA' in img_name:
+                        count_A += 1
+                        testA += res
 
-    testA = testA / count_A
-    testB = testB / count_B
+                    if 'testB' in img_name:
+                        count_B += 1
+                        testB += res
 
-    return total, testA, testB
+
+    total = total / count
+    out['total'] = total
+
+
+    if args.dataset == 'Glas':
+        #total = (testA + testB) / (count_A + count_B)
+
+        testA = testA / count_A
+        testB = testB / count_B
+        out['testA'] = testA
+        out['testB'] = testB
+
+
+    #if args.dataset == 'carg':
+    #    total = crag_res / count
+    #    testA = 0.1
+    #    testB = 0.1
+
+    #return total, testA, testB
+    return out
 
 
 
@@ -784,7 +807,14 @@ def evaluate(net, val_dataloader, args):
 
 
 
+
 if __name__ == '__main__':
+
+
+    # from gpustats import GPUStats
+    # gpu_stats = GPUStats(gpus_needed=1, sleep_time=10, exec_thresh=3, max_gpu_mem_avail=0.01, max_gpu_util=0.01)
+    # gpu_stats.run()
+
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-b', type=int, default=10,
@@ -797,7 +827,7 @@ if __name__ == '__main__':
     parser.add_argument('-wd', type=float, default=0, help='training epoches')
     parser.add_argument('-resume', type=bool, default=False, help='if resume training')
     parser.add_argument('-net', type=str, required=True, help='if resume training')
-    parser.add_argument('-dataset', type=str, default='Camvid', help='dataset name')
+    parser.add_argument('-dataset', type=str, default='Glas', help='dataset name')
     parser.add_argument('-prefix', type=str, default='', help='checkpoint and runs folder prefix')
     parser.add_argument('-alpha', type=float, default=1, help='panalize parameter')
     parser.add_argument('-op', type=str, default='or', help='mask operation')
@@ -817,14 +847,14 @@ if __name__ == '__main__':
 
     root_path = os.path.dirname(os.path.abspath(__file__))
 
-    checkpoint_path = os.path.join(
-        root_path, settings.CHECKPOINT_FOLDER, args.prefix + '_' + settings.TIME_NOW)
+    # checkpoint_path = os.path.join(
+    #     root_path, settings.CHECKPOINT_FOLDER, args.prefix + '_' + settings.TIME_NOW)
     log_dir = os.path.join(root_path, settings.LOG_FOLDER, args.prefix + '_' +settings.TIME_NOW)
     print('saving tensorboard log into {}'.format(log_dir))
 
-    if not os.path.exists(checkpoint_path):
-        os.makedirs(checkpoint_path)
-    checkpoint_path = os.path.join(checkpoint_path, '{epoch}-{type}.pth')
+    # if not os.path.exists(checkpoint_path):
+    #     os.makedirs(checkpoint_path)
+    # checkpoint_path = os.path.join(checkpoint_path, '{epoch}-{type}.pth')
 
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
@@ -901,24 +931,32 @@ if __name__ == '__main__':
     # for debug
     #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Wednesday_08_March_2023_23h_28m_07s/iter_39999.pt'
     #ckpt_path = 'best_total_Dice_0.8844_iter_5999.pt'
-    ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Sunday_12_March_2023_18h_52m_04s/iter_39999.pt'
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Sunday_12_March_2023_18h_52m_04s/iter_39999.pt'
+
+    # pretrained
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Wednesday_15_March_2023_23h_47m_53s/iter_39999.pt'
+
+    # test_pretraining_eihs
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Saturday_18_March_2023_22h_57m_50s/iter_39999.pt'
+
+    # test_CRCTP
+    ckpt_path = '/data/hdd1/by/mmclassification/work_dirs/gland/latest.pth'
 
     # glas+crag+rings+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin_rings_densecl/latest.pth'
     # glas+crag+sin+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin/latest.pth'
     print('Loading pretrained checkpoint from {}'.format(ckpt_path))
-    #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path)['state_dict'])
-    new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path))
+    new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path)['state_dict'])
+    #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path))
     net.load_state_dict(new_state_dict)
     print('Done!')
-    #import sys; sys.exit()
 
     if args.gpu:
         net = net.cuda()
 
     tensor = torch.Tensor(1, 3, 480, 480)
-    net.eval()
+    # net.eval()
     #utils.visualize_network(writer, net, tensor)
     net.train()
 
