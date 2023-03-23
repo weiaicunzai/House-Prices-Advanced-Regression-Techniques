@@ -15,7 +15,7 @@ import skimage.morphology as morph
 
 
 import transforms
-from dataset import CamVid, VOC2012Aug, Glas, PreTraining
+from dataset import VOC2012Aug, Glas, PreTraining, CRAG
 from conf import settings
 from metric import eval_metrics, gland_accuracy_object_level
 
@@ -38,9 +38,11 @@ def _get_lastlayer_params(net):
     last_layer_bias = None
     for name, para in net.named_parameters():
         if 'weight' in name:
-            last_layer_weights = para
+            if para.grad is not None:
+                last_layer_weights = para
         if 'bias' in name:
-            last_layer_bias = para
+            if para.grad is not None:
+                last_layer_bias = para
 
     return last_layer_weights, last_layer_bias
 
@@ -76,8 +78,11 @@ def compute_mean_and_std(dataset):
     mean = 0
     std = 0
 
+    count = 0
+    print(len(dataset), 11)
     for img, _ in dataset:
         mean += np.mean(img, axis=(0, 1))
+        count += 1
 
     mean /= len(dataset)
 
@@ -394,7 +399,8 @@ def print_eval(class_names, results):
 def pretrain_training_transforms():
 
     #crop_size=(256, 256)
-    crop_size=(480, 480)
+    #crop_size=(480, 480)
+    crop_size=(224, 224)
     trans = transforms.Compose([
             transforms.ElasticTransform(alpha=10, sigma=3, alpha_affine=20, p=0.5),
             # transforms.RandomRotation(degrees=90, expand=False),
@@ -402,7 +408,7 @@ def pretrain_training_transforms():
             transforms.Resize(range=[0.5, 1.5]),
             #transforms.Resize(min_size=208 + 30),
             #transforms.Resize(min_size=256),
-            transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True),
+            transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=1, pad_if_needed=True),
             transforms.RandomVerticalFlip(),
             transforms.RandomHorizontalFlip(),
             transforms.RandomApply(
@@ -436,7 +442,7 @@ def pretrain_test_transforms():
             flip=False,
             #flip_direction=['horizontal', 'vertical'],
             #flip_direction=['horizontal'],
-            flip_direction=['h'],
+            flip_direction=['h', 'v'],
             # transforms=[
                 # transforms.ToTensor(),
                 # transforms.Normalize(settings.MEAN, settings.STD),
@@ -444,7 +450,8 @@ def pretrain_test_transforms():
             resize_to_multiple=False,
             #min_size=256,
             #min_size=480,
-            min_size=480,
+            #min_size=480,
+            min_size=224,
             #min_size=None,
             mean=settings.MEAN,
             std=settings.STD
@@ -509,12 +516,12 @@ def data_loader(args, image_set):
 
         return data_loader
 
-    if args.dataset == 'Camvid':
-        dataset = CamVid(
-            'data',
+    if args.dataset == 'crag':
+        dataset = CRAG(
+            '/data/smb/syh/gland_segmentation/CRAGV2/CRAG/',
             image_set=image_set,
-            download=args.download
         )
+
     elif args.dataset == 'Glas':
         dataset = Glas(
             'data',
@@ -531,6 +538,12 @@ def data_loader(args, image_set):
     else:
         raise ValueError('datset {} not supported'.format(args.dataset))
 
+    if args.dataset == 'Glas':
+            crop_size=(480, 480)
+
+    if args.dataset == 'crag':
+            #crop_size=(768, 768)
+            crop_size=(1024, 1024)
     if image_set == 'train':
         #img_scale = (522, 775)
         #img_norm_cfg = dict(
@@ -569,11 +582,16 @@ def data_loader(args, image_set):
         #    transforms.Normalize(settings.MEAN, settings.STD),
         #])
 
-        crop_size=(480, 480)
+        #crop_size=(480, 480)
+        #crop_size=(1024, 1024)
+        # if args.dataset == 'Glas':
+            # crop_size=(480, 480)
+
+        # if args.dataset == 'crag':
+            # crop_size=(768, 768)
         #crop_size=(208, 208)
         trans = transforms.Compose([
             transforms.ElasticTransform(alpha=10, sigma=3, alpha_affine=30, p=0.5),
-            # transforms.RandomRotation(degrees=90, expand=False),
             transforms.RandomRotation(degrees=90, expand=True),
             transforms.Resize(range=[0.5, 1.5]),
             #transforms.Resize(min_size=208 + 30),
@@ -582,7 +600,7 @@ def data_loader(args, image_set):
             transforms.RandomApply(
                 transforms=[transforms.PhotoMetricDistortion()]
             ),
-            transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.95, pad_if_needed=True),
+            transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.99, pad_if_needed=True),
             transforms.ToTensor(),
             transforms.Normalize(settings.MEAN, settings.STD)
         ])
@@ -613,7 +631,9 @@ def data_loader(args, image_set):
             resize_to_multiple=False,
             #min_size=208,
             #min_size=None,
-            min_size=480,
+            #min_size=480,
+            #min_size=1024,
+            min_size=crop_size[0],
             mean=settings.MEAN,
             std=settings.STD
         )
@@ -624,14 +644,36 @@ def data_loader(args, image_set):
         #     #transforms.Normalize(settings.MEAN, settings.STD),
         # ])
         trans = transforms.MultiScaleFlipAug(
-            img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
+            # img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
+            # flip=True,
+            # # flip_direction=['horizontal', 'vertical'],
+            # flip_direction=['horizontal'],
+            # transforms=[
+            #     transforms.ToTensor(),
+            #     transforms.Normalize(settings.MEAN, settings.STD),
+            # ]
+
+            #img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
+            img_ratios=[1],
             flip=True,
-            # flip_direction=['horizontal', 'vertical'],
-            flip_direction=['horizontal'],
-            transforms=[
-                transforms.ToTensor(),
-                transforms.Normalize(settings.MEAN, settings.STD),
-            ]
+            #flip=False,
+            #flip_direction=['horizontal', 'vertical', ],
+            #flip_direction=['h', 'v'],
+            flip_direction=['h', 'v', 'hv', 'r90'],
+            #flip_direction=['h', 'v'],
+            #flip_direction=['horizontal'],
+            # transforms=[
+                # transforms.ToTensor(),
+                # transforms.Normalize(settings.MEAN, settings.STD),
+            # ]
+            resize_to_multiple=False,
+            #min_size=208,
+            #min_size=None,
+            #min_size=480,
+            #min_size=1024,
+            min_size=crop_size[0],
+            mean=settings.MEAN,
+            std=settings.STD
         )
 
     else:
@@ -664,7 +706,8 @@ def data_loader(args, image_set):
         data_loader = torch.utils.data.DataLoader(
                 dataset, batch_size=args.b, num_workers=4, shuffle=True, pin_memory=True,
                 persistent_workers=True,
-                prefetch_factor=4
+                prefetch_factor=4,
+                # collate_fn=multiscale_collate
                 )
 
     return data_loader
@@ -813,7 +856,7 @@ def test(net, test_dataloader, crop_size, scales, base_size, classes, mean, std,
     ig_idx = test_dataloader.dataset.ignore_index
     cls_names = test_dataloader.dataset.class_names
     net = net.cuda()
-    for i, (img, label) in enumerate(test_dataloader):
+    for i, (img, label, _) in enumerate(test_dataloader):
         assert test_dataloader.batch_size == 1
         img = img.cuda()
         label = label.cuda()
@@ -1056,6 +1099,7 @@ def on_load_checkpoint(model_state_dict, pretrained_state_dict):
                 pretrain_tensor.resize_(model_tensor.shape)
 
             #print(pretrain_tensor.shape)
+            print('load key {} form pretrained model'.format(model_key))
             new_state_dict[model_key] = pretrain_tensor
         else:
             #print('heelo')
