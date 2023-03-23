@@ -83,7 +83,7 @@ class TG(nn.Module):
                 in_channels=512,
                 out_channels=256,
                 kernel_size=1
-            ),
+            )
             #BasicConv2d(512, num_classes, 1)
         )
         self.register_buffer("queue", torch.randn(num_classes, 1000, 256))
@@ -107,7 +107,8 @@ class TG(nn.Module):
         #print(type(feats['out']))
         #print(feats['out'])
         gland = self.gland_head(feats['out']) # layer 4
-        #print(gland.shape)
+
+
         out = self.out(gland)
         out = F.interpolate(
             out,
@@ -116,7 +117,8 @@ class TG(nn.Module):
             align_corners=True,
             mode='bilinear'
         )
-        #output = self.head(feats[-1]) # layer 4
+
+
         gland = F.interpolate(
             gland,
             #size=(H, W),
