@@ -67,7 +67,7 @@ class GlandContrastLoss(nn.Module):
         self.num_nagative = num_nagative
         self.op = 'xor'
         self.temperature = temperature
-        #self.base_temperature = 0.1
+        self.base_temperature = 0.1
         #self.infonce_loss_fn = losses.NTXentLoss(temperature=0.07)
         self.store_values = {
         }
@@ -783,6 +783,8 @@ class GlandContrastLoss(nn.Module):
         if add_dim:
             output = output.squeeze(3)
         #print(feats.shape, points.shape, output.shape, 'after')
+
+        output = output.permute(0, 2, 1)
         return output
 
     def get_points_train(self, gt_seg, uncertain_mask):
@@ -833,28 +835,42 @@ class GlandContrastLoss(nn.Module):
         # candidate_mask[ignore_mask] = 0
 
 
+    def multi_level_point_sample(self, feats, points, align_corners, fcs):
+        out = 0
+        #for _, values in feats.items():
+
+        out += fcs[0](self.point_sample(feats['low_level'], points, align_corners))
+        out += fcs[1](self.point_sample(feats['layer2'], points, align_corners))
+        out += fcs[2](self.point_sample(feats['aux'], points, align_corners))
+        out += fcs[3](self.point_sample(feats['out'], points, align_corners))
+        #out += fcs[4](self.point_sample(feats['gland'], points, align_corners))
 
 
-    def forward(self, feats, pred_logits, gt_seg, queue=None, queue_ptr=None):
+        return out
+
+
+
+    def forward(self, feats, pred_logits, gt_seg, queue=None, queue_ptr=None, fcs=None):
 
 
         self.store_values = {}
 
 
         with torch.no_grad():
-            mask = self.segment_mask(gts=gt_seg.detach().cpu().numpy(), preds=pred_logits.detach().cpu().numpy(), op=self.op, out_size=(480, 480))
+            mask = self.segment_mask(gts=gt_seg.detach().cpu().numpy(), preds=pred_logits.detach().cpu().numpy(), op=self.op, out_size=gt_seg.shape[-2:])
             mask = torch.tensor(mask, dtype=gt_seg.dtype, device=gt_seg.device)
             uncertain_mask = self.cal_uncertain_mask(pred_logits, mask)
             gland_points, bg_points = self.get_points_train(gt_seg, uncertain_mask)
 
         #print(feats.shape)
 
-        gland_feats = self.point_sample(feats, gland_points, align_corners=True)
-        gland_feats = gland_feats.permute(0, 2, 1)
+        #gland_feats = self.point_sample(feats, gland_points, align_corners=True)
+        #gland_feats = gland_feats.permute(0, 2, 1)
 
-        bg_feats = self.point_sample(feats, bg_points, align_corners=True)
-        bg_feats = bg_feats.permute(0, 2, 1)
-        #print(gland_feats.shape, bg_feats.shape, self.num_nagative)
+        #bg_feats = self.point_sample(feats, bg_points, align_corners=True)
+        #bg_feats = bg_feats.permute(0, 2, 1)
+        gland_feats = self.multi_level_point_sample(feats, gland_points, align_corners=True, fcs=fcs)
+        bg_feats = self.multi_level_point_sample(feats, bg_points, align_corners=True, fcs=fcs)
 
 
 
@@ -959,7 +975,7 @@ class GlandContrastLoss(nn.Module):
 
         #loss = self.infonce_loss_fn()
 
-        loss = (gland_loss + bg_loss) / 2
+        loss = (self.temperature / self.base_temperature) * (gland_loss + bg_loss) / 2
 
         with torch.no_grad():
             self._dequeue_and_enqueue(gland_feats.detach(), bg_feats.detach(), queue, queue_ptr)
