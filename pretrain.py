@@ -20,7 +20,6 @@ import cv2
 import transforms
 import utils
 from conf import settings
-from dataset.camvid import CamVid
 from dataset.voc2012 import VOC2012Aug
 #from dataset.camvid_lmdb import CamVid
 from lr_scheduler import PolynomialLR, WarmUpLR, WarmUpWrapper
@@ -165,7 +164,7 @@ def train(net, train_dataloader, val_loader, writer, args):
                 #loss = loss.mean()
                 #######  two branches
 
-                gland_preds, aux_preds = net(images)
+                gland_preds, aux_preds, _ = net(images)
                 loss = gland_loss_fn_ce(gland_preds, masks) + \
                                 3 * gland_loss_fn_dice(gland_preds, masks)
 
@@ -195,7 +194,6 @@ def train(net, train_dataloader, val_loader, writer, args):
         #    torch.save(masks, 'masks.pt')
         #    torch.save(cnt_masks, 'cnt_masks.pt')
         #    torch.save(gland_masks, 'gland_masks.pt')
-        #    import sys; sys.exit()
         #if args.poly:
             #train_scheduler.step()
         #p.step()
@@ -432,11 +430,9 @@ def evaluate(net, val_dataloader, args):
     with torch.no_grad():
         #print(val_dataloader.batch_size)
         for img_metas in tqdm(val_dataloader):
-            #print(len(img_metas))
             for img_meta in img_metas:
                 count += 1
 
-                #print(img_meta)
                 imgs = img_meta['imgs']
                 #if 'testA_39' not in img_meta['img_name']:
                 #    continue
@@ -659,6 +655,10 @@ def evaluate(net, val_dataloader, args):
 
 
 if __name__ == '__main__':
+
+    # from gpustats import GPUStats
+    # gpu_stats = GPUStats(gpus_needed=1, sleep_time=10, exec_thresh=3, max_gpu_mem_avail=0.01, max_gpu_util=0.01)
+    # gpu_stats.run()
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-b', type=int, default=10,
