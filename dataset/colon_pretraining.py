@@ -13,6 +13,10 @@ import sys
 sys.path.append(os.getcwd())
 from conf import settings
 
+import scipy.io as sio
+
+
+
 
 class PreTraining(Dataset):
     def __init__(self, image_set, transforms=None):
@@ -141,42 +145,148 @@ class PreTraining(Dataset):
         imgs = []
         seg_maps = []
 
-        img, seg_map = self.get_prostate_sin()
-        num_imgs_prostate_sin = len(img)
-        imgs.extend(img)
-        seg_maps.extend(seg_map)
+        # img, seg_map = self.get_lizeard()
+        # imgs.extend(img)
+        # seg_maps.extend(seg_map)
 
-        img, seg_map = self.get_prostate_rings()
-        #num_imgs_rings = len(img)
-        #img, seg_map = self.over_sampling(img, seg_map, num_imgs_prostate_sin)
-        imgs.extend(img)
-        seg_maps.extend(seg_map)
+        # img, seg_map = self.get_monusac()
+        # imgs.extend(img)
+        # seg_maps.extend(seg_map)
+
+        # img, seg_map = self.get_tnbc()
+        # imgs.extend(img)
+        # seg_maps.extend(seg_map)
+
+        # img, seg_map = self.get_cpm17()
+        # imgs.extend(img)
+        # seg_maps.extend(seg_map)
+
+        # img, seg_map = self.get_kumar()
+        # imgs.extend(img)
+        # seg_maps.extend(seg_map)
+
+        # img, seg_map = self.get_consep()
+        # imgs.extend(img)
+        # seg_maps.extend(seg_map)
+
+
+        #img, seg_map = self.get_prostate_sin()
+        #imgs.extend(img)
+        #seg_maps.extend(seg_map)
         #print(len(imgs))
 
-        img, seg_map = self.get_glas()
-        num_imgs_glas = len(img)
-        #img, seg_map = self.over_sampling(img, seg_map, num_imgs_rings)
-        #print(len(img))
-        #img, seg_map = self.over_sampling(img, seg_map, num_imgs_prostate_sin)
-        #print(len(img))
-        imgs.extend(img)
-        seg_maps.extend(seg_map)
 
-        img, seg_map = self.get_crag()
-        print(len(img))
-        #img, seg_map = self.over_sampling(img, seg_map, num_imgs_rings)
-        #img, seg_map = self.over_sampling(img, seg_map, num_imgs_prostate_sin)
-        #print(len(img))
-        print(len(img))
-        #import sys; sys.exit()
+        #img, seg_map = self.get_prostate_rings()
+        ##num_imgs_rings = len(img)
+        ##img, seg_map = self.over_sampling(img, seg_map, num_imgs_prostate_sin)
+        #imgs.extend(img)
+        #seg_maps.extend(seg_map)
+        #print(len(imgs))
+        #print(len(imgs))
+
+        #img, seg_map = self.get_glas()
+        #num_imgs_glas = len(img)
+        ##img, seg_map = self.over_sampling(img, seg_map, num_imgs_rings)
+        ##print(len(img))
+        ##img, seg_map = self.over_sampling(img, seg_map, num_imgs_prostate_sin)
+        ##print(len(img))
+        #imgs.extend(img)
+        #seg_maps.extend(seg_map)
+        #print(len(imgs))
+
+        #img, seg_map = self.get_crag()
+        ##img, seg_map = self.over_sampling(img, seg_map, num_imgs_rings)
+        ##img, seg_map = self.over_sampling(img, seg_map, num_imgs_prostate_sin)
+        ##print(len(img))
+        ##print(len(img))
+        ##import sys; sys.exit()
+        #imgs.extend(img)
+        #seg_maps.extend(seg_map)
+        #print(len(imgs))
+
+        #img, seg_map = self.get_crag_val()
+        #imgs.extend(img)
+        #seg_maps.extend(seg_map)
+        #print(len(imgs))
+
+        #for i in range(len(img))
+        #for img, seg_map in zip(imgs, seg_maps):
+        #    print(img)
+        #    print(seg_map)
+        img, seg_map = self.get_ebhi()
         imgs.extend(img)
         seg_maps.extend(seg_map)
+        print(len(imgs))
+
+
+        return imgs, seg_maps
+
+    def get_ebhi(self):
+
+        imgs = []
+        seg_maps = []
+        path = '/data/smb/syh/gland_segmentation/EBHI-SEG/'
+        for img in glob.iglob(os.path.join(path, '**', '*.png'), recursive=True):
+
+            #basename = os.path.basename(img)
+            dir_name = os.path.basename(os.path.dirname(img))
+            if dir_name != 'image':
+                continue
+
+            # lack of label
+            if 'GTGT2012149-2-400-001.png' in img:
+                continue
+
+            if 'GT2012149-2-400-001.png'  in img:
+                continue
+
+
+            img_info = {}
+            assert os.path.isfile(img)
+            segmap = img.replace('image', 'label')
+            assert os.path.isfile(segmap)
+
+            imgs.append(img)
+            #img_info['img_filename'] = img
+            #img_info['label'] = segmap
+            #img_infos.append(img_info)
+            seg_maps.append(segmap)
+
+        #path = '/data/hdd1/by/datasets/original/CRAG/train'
+        #path = '/data/hdd1/by/datasets/original/CRAGV2/CRAG/train'
+        #path = '/data/smb/syh/gland_segmentation/CRAGV2/CRAG/train/'
+
+        #imgs = []
+        #seg_maps = []
+        #for img in glob.iglob(os.path.join(path, 'Images',  '**', '*.png'), recursive=True):
+        #    #print(img)
+        #    imgs.append(img)
+        #    seg_map = img.replace('Images', 'Annotation')
+        #    #print(seg_map)
+        #    seg_maps.append(seg_map)
 
         return imgs, seg_maps
 
     def get_crag(self):
-        path = '/data/hdd1/by/datasets/original/CRAG/train'
-        path = '/data/hdd1/by/datasets/original/CRAGV2/CRAG/train'
+        #path = '/data/hdd1/by/datasets/original/CRAG/train'
+        #path = '/data/hdd1/by/datasets/original/CRAGV2/CRAG/train'
+        path = '/data/smb/syh/gland_segmentation/CRAGV2/CRAG/train/'
+
+        imgs = []
+        seg_maps = []
+        for img in glob.iglob(os.path.join(path, 'Images',  '**', '*.png'), recursive=True):
+            #print(img)
+            imgs.append(img)
+            seg_map = img.replace('Images', 'Annotation')
+            #print(seg_map)
+            seg_maps.append(seg_map)
+
+        return imgs, seg_maps
+
+    def get_crag_val(self):
+        #path = '/data/hdd1/by/datasets/original/CRAG/train'
+        #path = '/data/hdd1/by/datasets/original/CRAGV2/CRAG/train'
+        path = '/data/smb/syh/gland_segmentation/CRAGV2/CRAG/valid'
 
         imgs = []
         seg_maps = []
@@ -268,6 +378,134 @@ class PreTraining(Dataset):
 
         return imgs, seg_maps
 
+    def get_monusac(self):
+        path = '/data/smb/syh/colon_dataset/MoNuSAC/MoNuSAC_images_and_annotations'
+
+        imgs = []
+        seg_maps = []
+        for img in glob.iglob(os.path.join(path, '**', '*.tif'), recursive=True):
+            if 'Overlay' in img:
+                continue
+
+            seg_map = img.replace('.tif', '.npy')
+
+            imgs.append(img)
+            seg_maps.append(seg_map)
+
+
+
+        return imgs, seg_maps
+
+    def get_tnbc(self):
+        path = '/data/smb/syh/colon_dataset/TNBC/tnbc'
+
+        imgs = []
+        seg_maps = []
+        label_path = '/data/smb/syh/colon_dataset/TNBC/tnbc/Labels/'
+        for img in glob.iglob(os.path.join(path, '**', '*.png'), recursive=True):
+            if 'Overlay' in img:
+                continue
+
+            bs_name = os.path.basename(img).replace('.png', '.mat')
+            seg_map = os.path.join(label_path, bs_name)
+
+            #print(img)
+            #print(seg_map)
+            imgs.append(img)
+            seg_maps.append(seg_map)
+
+
+
+        return imgs, seg_maps
+
+    def get_kumar(self):
+        path = '/data/smb/syh/colon_dataset/Kumar/kumar'
+
+        imgs = []
+        seg_maps = []
+        for img in glob.iglob(os.path.join(path, '**', '*.tif'), recursive=True):
+            if 'Overlay' in img:
+                continue
+
+            label_path = img.replace('Images', 'Labels').replace('.tif', '.mat')
+
+            imgs.append(img)
+            seg_maps.append(label_path)
+
+
+
+        return imgs, seg_maps
+
+
+    def get_cpm17(self):
+        path = '/data/smb/syh/colon_dataset/CPM17/cpm17/'
+
+        imgs = []
+        seg_maps = []
+        for img in glob.iglob(os.path.join(path, '**', '*.png'), recursive=True):
+            if 'Overlay' in img:
+                continue
+
+            label_path = img.replace('Images', 'Labels').replace('.png', '.mat')
+
+            imgs.append(img)
+            seg_maps.append(label_path)
+
+
+
+        return imgs, seg_maps
+
+    def get_consep(self):
+        path = '/data/smb/syh/colon_dataset/CoNSeP/'
+
+        imgs = []
+        seg_maps = []
+        for img in glob.iglob(os.path.join(path, '**', '*.png'), recursive=True):
+            if 'Overlay' in img:
+                continue
+
+            label_path = img.replace('Images', 'Labels').replace('.png', '.mat')
+
+            #print(img)
+            #print(label_path)
+            imgs.append(img)
+            seg_maps.append(label_path)
+
+
+
+        #return img, label_path
+        return imgs, seg_maps
+
+
+    def get_lizeard(self):
+        path = '/data/smb/syh/gland_segmentation/Lizard/'
+        label = os.path.join(path, 'Lizard_Labels', 'Labels')
+
+
+
+        imgs = []
+        seg_maps = []
+        for img in glob.iglob(os.path.join(path, '**', '*.png'), recursive=True):
+            if 'Lizard_Images' not in img:
+                continue
+
+            imgs.append(img)
+
+            bs_name = os.path.basename(img)
+            bs_name = bs_name.replace('.png', '.mat')
+
+            label_map = os.path.join(label, bs_name)
+            seg_maps.append(label_map)
+
+            #seg_map = sio.loadmat(label_map)
+            #seg_map = seg_map['inst_map']
+
+            #seg_map[seg_map > 0] = 1
+            #seg_maps.append(seg_map)
+
+        return imgs, seg_maps
+
+
     def __len__(self):
         return len(self.imgs)
         #if self.image_set == 'train':
@@ -288,19 +526,41 @@ class PreTraining(Dataset):
         seg_map = self.seg_maps[index]
 
         image = cv2.imread(img)
-        label = cv2.imread(seg_map, -1)
 
+        if 'Lizard' in seg_map:
+
+            label= sio.loadmat(seg_map)
+            label = label['inst_map']
+
+        elif 'CoNSeP' in seg_map:
+            label = sio.loadmat(seg_map)
+            label = label['inst_map']
+        elif 'CPM17' in seg_map:
+            label = sio.loadmat(seg_map)
+            label = label['inst_map']
+        elif 'Kumar' in seg_map:
+            label = sio.loadmat(seg_map)
+            label = label['inst_map']
+        elif 'TNBC' in seg_map:
+            label = sio.loadmat(seg_map)
+            label = label['inst_map']
+        elif 'MoNuSAC' in seg_map:
+            label = np.load(seg_map)
+        else:
+
+            label = cv2.imread(seg_map, -1)
         if image is None:
             print(img)
         if label is None:
             print(seg_map)
 
-
+        assert os.path.isfile(seg_map)
         #if label
         #print(seg_map)
         #print(np.unique(label))
+        if label is None:
+            print(seg_map, 'NOOOOOOOOOOOOOONE')
         label[label > 0] = 1
-
 
 
         if self.image_set != 'train':
