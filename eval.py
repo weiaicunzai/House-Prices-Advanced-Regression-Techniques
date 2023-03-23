@@ -9,7 +9,7 @@ import transforms
 from conf import settings
 import utils
 from metric import eval_metrics
-
+from train import evaluate
 #from dataset.camvid import CamVid
 #from metrics import Metrics
 #from model import UNet
@@ -39,42 +39,50 @@ if __name__ == '__main__':
     checkpoint = os.path.basename(os.path.dirname(args.weight))
 
     if args.dataset == 'Glas':
-        test_dataloader = utils.data_loader(args, 'testA')
+        #test_dataloader = utils.data_loader(args, 'testA')
+        test_dataloader = utils.data_loader(args, 'val')
         test_dataset = test_dataloader.dataset
         net = utils.get_model(args.net, 3, test_dataset.class_num, args=args)
         net.load_state_dict(torch.load(args.weight))
         net = net.cuda()
         print(args.weight)
         net.eval()
-        print('Glas testA')
+        #print('Glas testA')
         with torch.no_grad():
-            utils.test(
-                net,
-                test_dataloader,
-                settings.IMAGE_SIZE,
-                settings.SCALES,
-                settings.BASE_SIZE,
-                test_dataset.class_num,
-                settings.MEAN,
-                settings.STD,
-                checkpoint
-            )
+            results = evaluate(net, test_dataloader, args)
+            for key, values in results.items():
+                print('{}: F1 {}, Dice:{}, Haus:{}'.format(key, *values))
 
-        test_dataloader = utils.data_loader(args, 'testB')
-        test_dataset = test_dataloader.dataset
-        print('Glas testB')
-        with torch.no_grad():
-            utils.test(
-                net,
-                test_dataloader,
-                settings.IMAGE_SIZE,
-                settings.SCALES,
-                settings.BASE_SIZE,
-                test_dataset.class_num,
-                settings.MEAN,
-                settings.STD,
-                checkpoint
-            )
+            #utils.test(
+            #    net,
+            #    test_dataloader,
+            #    settings.IMAGE_SIZE,
+            #    settings.SCALES,
+            #    settings.BASE_SIZE,
+            #    test_dataset.class_num,
+            #    settings.MEAN,
+            #    settings.STD,
+            #    checkpoint
+            #)
+
+        #test_dataloader = utils.data_loader(args, 'testB')
+        #test_dataset = test_dataloader.dataset
+        #print('Glas testB')
+        #with torch.no_grad():
+        #    results = evaluate(net, test_dataloader, args)
+        #    for key, values in results.items():
+        #        print('{}: F1 {}, Dice:{}, Haus:{}'.format(key, *values))
+            #utils.test(
+            #    net,
+            #    test_dataloader,
+            #    settings.IMAGE_SIZE,
+            #    settings.SCALES,
+            #    settings.BASE_SIZE,
+            #    test_dataset.class_num,
+            #    settings.MEAN,
+            #    settings.STD,
+            #    checkpoint
+            #)
 
         #utils.test(
         #    net,
