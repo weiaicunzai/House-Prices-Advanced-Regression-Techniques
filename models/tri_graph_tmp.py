@@ -378,6 +378,19 @@ class GraphHead(nn.Module):
         #return spatial_x
 
 
+class BasicLinear(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.fc = nn.Sequential(
+            #nn.Linear(in_channels, in_channels),
+            #nn.ReLU(inplace=True),
+            nn.Linear(in_channels, out_channels),
+        )
+
+    def forward(self, x):
+        x = self.fc(x)
+        return x
+
 
 class TG(nn.Module):
     def __init__(self, backbone, num_classes):
@@ -394,29 +407,42 @@ class TG(nn.Module):
         )
 
         self.classifier = nn.Sequential(
-            #nn.Conv2d(512 + 48, 256, 3, padding=1, bias=False),
-            nn.Conv2d(256, 256, 3, padding=1, bias=False),
+            nn.Conv2d(self.graph_head_dim + 48, 256, 3, padding=1, bias=False),
+            #nn.Conv2d(256, 256, 3, padding=1, bias=False),
             nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
             nn.Conv2d(256, num_classes, 1)
         )
 
-        q_len = 5000
-        self.register_buffer("queue", torch.randn(num_classes, q_len, 256))
+        #q_len = 5000
+        q_len = 1000
+        #q_len = 2500
+        q_dim = 256
+        self.register_buffer("queue", torch.randn(num_classes, q_len, q_dim))
         #self.register_buffer("queue", torch.randn(num_classes, q_len, 2))
         self.queue = nn.functional.normalize(self.queue, p=2, dim=2)
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
+
+        self.fcs =  nn.ModuleList(
+            [
+                BasicLinear(256, 256),
+                BasicLinear(512, 256),
+                BasicLinear(1024, 256),
+                BasicLinear(2048, 256),
+                # BasicLinear(256, 256),
+            ]
+        )
 
         #self.neck = nn.Sequential(
         #    nn.Linear(2048, 2048),
         #    nn.ReLU(inplace=True),
         #    nn.Linear(2048, 256)
         #)
-        self.out = nn.Sequential(
-            nn.Conv2d(self.graph_head_dim + 48, 256, 1, padding=1, bias=False),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-        )
+        #self.out = nn.Sequential(
+        #    nn.Conv2d(self.graph_head_dim + 48, 256, 1, padding=1, bias=False),
+        #    nn.BatchNorm2d(256),
+        #    nn.ReLU(inplace=True),
+        #)
 
         #self.queue = nn.Parameter(num_classes, 5000, 256)
         #self.register_buffer("queue", torch.randn(num_classes, 5000, 256))
@@ -468,6 +494,7 @@ class TG(nn.Module):
         #    BasicConv2d(1024, 512),
         #    BasicConv2d(512, num_classes)
         #)
+        #self.fcs = nn.
 
 
     def forward(self, x):
@@ -489,17 +516,24 @@ class TG(nn.Module):
             align_corners=True,
             mode='bilinear'
         )
+
+        #feats['gland'] = gland
+
         #concat_inputs = torch.cat([gland, low_level_feat], dim=1)
         gland = torch.cat([gland, low_level_feat], dim=1)
 
+
+        #feats[]
+        #for key, value in feats.items():
+            #print(key, value.shape)
 
 
 
 
         #concat_inputs = self.out(concat_inputs)
-        gland = self.out(gland)
+        #gland = self.out(gland)
 
-        sample = gland
+        #sample = gland
 
 
         #concat_inputs = F.interpolate(
@@ -521,11 +555,6 @@ class TG(nn.Module):
 
 
 
-        #gland = self.classifier(concat_inputs)
-
-
-
-
 
         if not self.training:
             return gland
@@ -538,10 +567,8 @@ class TG(nn.Module):
             mode='bilinear'
         )
 
-        #print(sample.shape)
 
-
-        return gland, aux, sample
+        return gland, aux, feats
 
 
 
