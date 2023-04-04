@@ -47,14 +47,14 @@ def train(net, train_dataloader, val_loader, writer, args):
 
     ckpt_manager = utils.CheckPointManager(ckpt_path, max_keep_ckpts=5)
 
-    optimizer = optim.SGD(net.parameters(), lr=args.lr * args.scale, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.wd)
     # iter_per_epoch = len(train_dataset) / args.b
 
     # max_iter = args.e * len(train_loader)
     total_iter = args.iter
     warmup_iter = int(args.iter * 0.1)
 
-    train_scheduler = PolynomialLR(optimizer, total_iters=total_iter - warmup_iter, power=0.9, min_lr=args.min_lr * args.scale)
+    train_scheduler = PolynomialLR(optimizer, total_iters=total_iter - warmup_iter, power=0.9, min_lr=args.min_lr)
     warmup_scheduler = WarmUpLR(optimizer, total_iters=warmup_iter)
     lr_schduler = WarmUpWrapper(warmuplr_scheduler=warmup_scheduler, lr_scheduler=train_scheduler)
 
@@ -68,7 +68,8 @@ def train(net, train_dataloader, val_loader, writer, args):
     cnt_loss_fn_dice = DiceLoss(class_weight=cnt_weight, ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
     #var_loss_fn = LossVariance()
 
-    contrasive_loss_fn = GlandContrastLoss(8, ignore_idx=train_dataloader.dataset.ignore_index, temperature=0.07)
+    #contrasive_loss_fn = GlandContrastLoss(8, ignore_idx=train_dataloader.dataset.ignore_index, temperature=0.07)
+    contrasive_loss_fn = GlandContrastLoss(4, ignore_idx=train_dataloader.dataset.ignore_index, temperature=0.07)
 
     #loss_l2 = nn.MSELoss()
     #loss_seg = SegmentLevelLoss(op=args.op)
@@ -195,17 +196,17 @@ def train(net, train_dataloader, val_loader, writer, args):
                 #mask = contrasive_loss(gland_preds, masks)
                 loss = loss * weight_maps + 0.4 * loss_aux * weight_maps
 
-                #if iter_idx > 20000:
+                if args.net == 'tg':
+                    loss = loss.mean()
 
+                if args.net == 'tgt':
 
+                    contrasive_loss, xor_mask = contrasive_loss_fn(out, gland_preds, masks, queue=net.queue, queue_ptr=net.queue_ptr, fcs=net.fcs)
 
-                # mask is gt_seg
-                #contrasive_loss, xor_mask = contrasive_loss_fn(out, gland_preds, masks, queue=net.queue, queue_ptr=net.queue_ptr, fcs=net.fcs)
+                    sup_loss = (loss + xor_mask * loss).mean()
+                    loss = sup_loss + args.alpha * contrasive_loss
 
-                #sup_loss = (loss + xor_mask * loss).mean()
-                #loss = sup_loss + args.alpha * contrasive_loss
-                loss = loss.mean()
-                #print(net.queue_ptr, loss.item(), optimizer.param_groups[0]['lr'])
+                #loss = loss.mean()
 
                 if args.vis and iter_idx == vis_idx:
                     print('save gland_preds.....')
@@ -229,11 +230,11 @@ def train(net, train_dataloader, val_loader, writer, args):
                         ii = ii.softmax(dim=2)
                         #print(ii[3, 4])
                         ii_min = ii.min(dim=2)[0]
-                        print(ii_min)
+                        # print(ii_min)
                         ii = ii.max(dim=2)[0]
                         mm = masks[idx] == 255
                         mm = masks[idx] == 255
-                        print(ii.dtype)
+                        # print(ii.dtype)
                         diff = (ii - ii_min) * 255
                         ii = ii * 255
                         diff[mm] = 0
@@ -574,8 +575,8 @@ def evaluate(net, val_dataloader, args):
                     crop_size=None,
                     stride=None,
                     #mode='slide',
-                    #rescale=True,
-                    rescale=False,
+                    rescale=True,
+                    #rescale=False,
                     mode='whole',
                     num_classes=valid_dataset.class_num
                 )
@@ -811,9 +812,6 @@ def evaluate(net, val_dataloader, args):
 if __name__ == '__main__':
 
 
-    #from gpustats import GPUStats
-    #gpu_stats = GPUStats(gpus_needed=1, sleep_time=60 * 5, exec_thresh=3, max_gpu_mem_avail=0.01, max_gpu_util=0.01)
-    #gpu_stats.run()
 
 
     parser = argparse.ArgumentParser()
@@ -824,12 +822,12 @@ if __name__ == '__main__':
     parser.add_argument('-e', type=int, default=120, help='training epoches')
     parser.add_argument('-iter', type=int, default=40000, help='training epoches')
     parser.add_argument('-eval_iter', type=int, default=2000, help='training epoches')
-    parser.add_argument('-wd', type=float, default=0, help='training epoches')
+    parser.add_argument('-wd', type=float, default=1e-4, help='training epoches')
     parser.add_argument('-resume', type=bool, default=False, help='if resume training')
     parser.add_argument('-net', type=str, required=True, help='if resume training')
     parser.add_argument('-dataset', type=str, default='Glas', help='dataset name')
     parser.add_argument('-prefix', type=str, default='', help='checkpoint and runs folder prefix')
-    parser.add_argument('-alpha', type=float, default=1, help='panalize parameter')
+    parser.add_argument('-alpha', type=float, default=0.1, help='panalize parameter')
     parser.add_argument('-op', type=str, default='or', help='mask operation')
     parser.add_argument('-download', action='store_true', default=False,
         help='whether to download camvid dataset')
@@ -840,10 +838,15 @@ if __name__ == '__main__':
     parser.add_argument('-min_lr', type=float, default=1e-4, help='min_lr for poly')
     parser.add_argument('-branch', type=str, default='hybird', help='dataset name')
     parser.add_argument('-fp16', action='store_true', default=False, help='whether to use mixed precision training')
-    parser.add_argument('-scale', type=float, default=1, help='min_lr for poly')
+    parser.add_argument('-wait', action='store_true', default=False, help='whether to wait until there is gpu aviliable')
     parser.add_argument('-vis', action='store_true', default=False, help='vis result of mid layer')
     args = parser.parse_args()
     print(args)
+
+    if args.wait:
+        from gpustats import GPUStats
+        gpu_stats = GPUStats(gpus_needed=1, sleep_time=60 * 5, exec_thresh=3, max_gpu_mem_avail=0.01, max_gpu_util=0.01)
+        gpu_stats.run()
 
     root_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -947,14 +950,33 @@ if __name__ == '__main__':
 
     # eish + crag + glas
     #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Sunday_26_March_2023_17h_48m_38s/iter_39999.pt'
-    ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Saturday_25_March_2023_23h_51m_46s/iter_39999.pt'
+
+
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Saturday_25_March_2023_23h_51m_46s/iter_39999.pt'
+    ckpt_path = '/data/smb/syh/checkpoints/only_pretrained_on_ehis/iter_39999.pt'
+
+    # zuihao pretrain
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Monday_27_March_2023_21h_23m_46s/iter_39999.pt'
+
+    # swav_crag_train_crag_test_glas_train_ehis
+    # ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_swav_ehis_glas_crag/latest.pth'
+
+    # trained on classification glas val
+    #ckpt_path = '/data/hdd1/by/mmclassification/test_glas_val/latest.pth'
+
+    # crag with graph attention
+    # ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Monday_27_March_2023_21h_23m_46s/iter_39999.pt'
     # glas+crag+rings+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin_rings_densecl/latest.pth'
     # glas+crag+sin+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin/latest.pth'
     print('Loading pretrained checkpoint from {}'.format(ckpt_path))
-    #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path)['state_dict'])
-    new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path))
+    ckpt = torch.load(ckpt_path)
+    if 'state_dict' in ckpt:
+        ckpt = ckpt['state_dict']
+
+    new_state_dict = utils.on_load_checkpoint(net.state_dict(), ckpt)
+    #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path))
     net.load_state_dict(new_state_dict)
     print('Done!')
 
