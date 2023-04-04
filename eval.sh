@@ -1,4 +1,4 @@
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 #python eval.py -net segnet -weight checkpoints/Wednesday_13_January_2021_17h_33m_58s/1257-best.pth  -b 1 -dataset Glas
 #python eval.py -net segnet -weight checkpoints/Wednesday_13_January_2021_03h_11m_26s/792-best.pth  -b 1 -dataset Glas
 #python eval.py -net segnet -weight /data/by/House-Prices-Advanced-Regression-Techniques/checkpoints/Wednesday_20_January_2021_22h_53m_23s/1381-best.pth  -b 1 -dataset Glas
@@ -46,7 +46,18 @@ export CUDA_VISIBLE_DEVICES=1
 #python eval.py -net hybird -weight  /data/by/House-Prices-Advanced-Regression-Techniques/checkpoints/trans_branch_SGD_473_Thursday_06_May_2021_02h_09m_29s/654-best.pth  -b 1 -dataset Glas -branch trans
 #python eval.py -net hybird -weight  /data/by/House-Prices-Advanced-Regression-Techniques/checkpoints/trans_branch_SGD_473_Thursday_06_May_2021_05h_27m_38s/765-best.pth  -b 1 -dataset Glas -branch trans
 #python eval.py -net  unet -weight  /data/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Wednesday_12_May_2021_01h_10m_01s/894-best.pth  -b 1 -dataset Glas
-python eval.py -net  unet -weight  /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Thursday_24_November_2022_10h_37m_08s/708-best.pth -b 1 -dataset Glas
+#python eval.py -net  unet -weight  /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Thursday_24_November_2022_10h_37m_08s/708-best.pth -b 1 -dataset Glas
+#python eval.py -net  unet -weight  /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Thursday_24_November_2022_10h_37m_08s/708-best.pth -b 1 -dataset Glas
+
+#python eval.py -net  tgt -weight  /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Sunday_19_March_2023_17h_50m_39s/best_testB_F1_0.8276_iter_9999.pt  -b 1 -dataset Glas
+#python eval.py -net  tg -weight  /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Saturday_25_March_2023_23h_51m_46s/iter_39999.pt  -b 1 -dataset Glas
+
+
+# 0.904+
+#python eval.py -net  tgt -weight  /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Monday_27_March_2023_22h_00m_31s/best_total_F1_0.9041_iter_35999.pt  -b 1 -dataset Glas
+
+
+python eval.py -net  tgt -weight  /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Tuesday_04_April_2023_02h_00m_35s/best_total_F1_0.8950_iter_27999.pt  -b 1 -dataset Glas
 
 
 
