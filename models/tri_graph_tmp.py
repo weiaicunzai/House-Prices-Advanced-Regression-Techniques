@@ -300,9 +300,9 @@ class GCU(nn.Module):
         graph = self.gcns(graph)
 
         # graph : [16, 256, 8][B, dim, num_nodes]
-        #if queue is not None:
-        #    attn = self.attention(graph, queue)
-        #    graph = graph + attn
+        # if queue is not None:
+        #     attn = self.attention(graph, queue)
+        #     graph = graph + attn
 
         graph = graph.bmm(assign)
 
