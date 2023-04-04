@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+import cv2
+
 
 
 
@@ -127,14 +129,15 @@ def whole_inference(img, ori_shape, model, rescale):
                 # seg_logit = seg_logit[:, :, :resize_shape[0], :resize_shape[1]]
                 # size = img_meta[0]['ori_shape'][:2]
 
-        if rescale:
-            seg_logit = resize(
-                seg_logit,
-                # size=size,
-                size=ori_shape,
-                mode='bilinear',
-                align_corners=True,
-                warning=False)
+        # print(seg_logit.shape, ori_shape)
+        # if rescale:
+        #     seg_logit = resize(
+        #         seg_logit,
+        #         # size=size,
+        #         size=ori_shape,
+        #         mode='bilinear',
+        #         align_corners=True,
+        #         warning=False)
 
         return seg_logit
 
@@ -158,6 +161,7 @@ def inference(img, ori_shape, flip_direction, mode, model, num_classes, crop_siz
     # ori_shape = img_meta[0]['ori_shape']
     # assert all(_['ori_shape'] == ori_shape for _ in img_meta)
     # if self.test_cfg.mode == 'slide':
+    # print(img.shape)
     if mode == 'slide':
         seg_logit = slide_inference(
             img=img,
@@ -177,19 +181,30 @@ def inference(img, ori_shape, flip_direction, mode, model, num_classes, crop_siz
             model=model
         )
 
+    # print('after', img.shape, seg_logit.shape, ori_shape, rescale)
 
     # if self.out_channels == 1:
-    if num_classes == 1:
-         output = F.sigmoid(seg_logit)
-    else:
-        #gland_output = seg_logit[:, :2, :, :]
-        #cnt_output = seg_logit[:, 2:, :, :]
-        #gland_output = F.softmax(gland_output, dim=1)
-        #cnt_output = F.softmax(cnt_output, dim=1)
-        #output = torch.cat([gland_output, cnt_output], dim=1)
-        output = F.softmax(seg_logit, dim=1)
+    # if num_classes == 1:
+    #      output = F.sigmoid(seg_logit)
+    # else:
+    #     #gland_output = seg_logit[:, :2, :, :]
+    #     #cnt_output = seg_logit[:, 2:, :, :]
+    #     #gland_output = F.softmax(gland_output, dim=1)
+    #     #cnt_output = F.softmax(cnt_output, dim=1)
+    #     #output = torch.cat([gland_output, cnt_output], dim=1)
+    #     output = F.softmax(seg_logit, dim=1)
 
+    # if rescale:
+    #     seg_logit = resize(
+    #         seg_logit,
+    #         # size=size,
+    #         size=ori_shape,
+    #         mode='bilinear',
+    #         align_corners=True,
+    #         warning=False)
 
+    # print(seg_logit.shape, output.shape)
+    output = seg_logit
     # if flip:
         # flip_direction = img_meta[0]['flip_direction']
         # assert flip_direction in ['horizontal', 'vertical']
@@ -200,14 +215,65 @@ def inference(img, ori_shape, flip_direction, mode, model, num_classes, crop_siz
     if flip_direction == 'v':
             output = output.flip(dims=(2, ))
 
+    if flip_direction == 'vh':
+            output = output.flip(dims=(3, ))
+            output = output.flip(dims=(2, ))
+        #output = output.flip(dims=)
+
     if flip_direction == 'hv':
             output = output.flip(dims=(2, ))
             output = output.flip(dims=(3, ))
-        #output = output.flip(dims=)
 
     if flip_direction == 'r90':
             output = torch.rot90(output, k=1, dims=[2, 3])
-            #output = output.flip(dims=(3, ))
+
+    if flip_direction == 'r90h':
+            output = output.flip(dims=(3, ))
+            output = torch.rot90(output, k=1, dims=[2, 3])
+
+    if flip_direction == 'r90v':
+            output = output.flip(dims=(2, ))
+            output = torch.rot90(output, k=1, dims=[2, 3])
+
+    if flip_direction == 'r90hv':
+            output = output.flip(dims=(2, ))
+            output = output.flip(dims=(3, ))
+            output = torch.rot90(output, k=1, dims=[2, 3])
+
+    if rescale:
+        # seg_logit = resize(
+        output = resize(
+            # seg_logit,
+            output,
+            # size=size,
+            size=ori_shape,
+            mode='bilinear',
+            align_corners=True,
+            warning=False)
+
+    if num_classes == 1:
+        output = F.sigmoid(output)
+    else:
+        #gland_output = seg_logit[:, :2, :, :]
+        #cnt_output = seg_logit[:, 2:, :, :]
+        #gland_output = F.softmax(gland_output, dim=1)
+        #cnt_output = F.softmax(cnt_output, dim=1)
+        #output = torch.cat([gland_output, cnt_output], dim=1)
+        #output = F.softmax(seg_logit, dim=1)
+        output = F.softmax(output, dim=1)
+
+    # if rescale:
+    #     # seg_logit = resize(
+    #     output = resize(
+    #         # seg_logit,
+    #         output,
+    #         # size=size,
+    #         size=ori_shape,
+    #         mode='bilinear',
+    #         align_corners=True,
+    #         warning=False)
+
+    # print('img shape', img.shape, 'seg_logit', seg_logit.shape, 'output:', output.shape, 'ori_shape', ori_shape, 'rescale', rescale, 'flip_direction', flip_direction)
 
     return output
 
@@ -224,6 +290,12 @@ def aug_test(imgs, flip_direction, ori_shape, model, num_classes, mode, threshol
         # if idx == 0:
             # continue
         # img, gt_seg = data
+        # import cv2
+        # print('aa{}.jpg'.format(direction))
+        #print('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/tmp/img_{}.jpg'.format(flip_direction))
+        # print(type(img))
+        # s = cv2.imwrite('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/tmp/img_{}.jpg'.format(flip_direction), img)
+        # print(s)
         cur_seg_logit = inference(
             img=img,
             # flip=flip,
@@ -239,17 +311,13 @@ def aug_test(imgs, flip_direction, ori_shape, model, num_classes, mode, threshol
         # if seg_logit is None:
             # seg_logit = cur_seg_logit
 
-        #count += 1
-        #import cv2
-        #print(cur_seg_logit.shape)
-        #cv2.imwrite('test{}.png'.format(count), cur_seg_logit.argmax(dim=1).squeeze(0).cpu().numpy() * 80)
-        #print(count)
-        #else:
+        #output = cur_seg_logit.argmax(dim=1).squeeze(0)
+        #cv2.imwrite('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/tmp/after_{}.jpg'.format(flip_direction), output.cpu().numpy() * 255)
+
+
         seg_logit += cur_seg_logit
 
     seg_logit /= len(imgs)
-    #import sys; sys.exit()
-    # if self.out_channels == 1:
 
     if num_classes == 1:
         seg_pred = (seg_logit > threshold).to(seg_logit).squeeze(1)
@@ -265,6 +333,7 @@ def aug_test(imgs, flip_direction, ori_shape, model, num_classes, mode, threshol
     seg_pred = seg_pred.cpu().numpy()
     seg_pred = seg_pred.squeeze()
 
+    # import sys; sys.exit()
     # unravel batch dim
     # seg_pred = list(seg_pred)
     return seg_pred, seg_logit
