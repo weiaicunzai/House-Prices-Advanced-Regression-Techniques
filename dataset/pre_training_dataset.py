@@ -137,7 +137,7 @@ class GlasTrain(BaseDataset):
          img_infos = []
 
 
-         for img in glob.iglob(os.path.join(self.path, '**', '*.bmp'), recursive=True):
+        for img in glob.iglob(os.path.join(self.path, '**', '*.bmp'), recursive=True):
             basename = os.path.basename(img)
             if 'train' not in basename:
                 continue
@@ -163,11 +163,8 @@ class GlasTrain(BaseDataset):
             with open(os.path.join(self.path, 'Grade.csv')) as csv_file:
                 reader = csv.DictReader(csv_file)
                 for row in reader:
-                    #name,
                     self.cls_labels[row['name'] + '.bmp'] = row[' grade (GlaS)']
-                    #print(row['name'], row[' grade (GlaS)'])
-                    #print(row)
-                    #print(row.split(','))
+
 
         img_info = self.img_infos[idx]
         img_filename = img_info.get('img_filename')
