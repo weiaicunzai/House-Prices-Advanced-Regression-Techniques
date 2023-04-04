@@ -20,7 +20,7 @@ import cv2
 import transforms
 import utils
 from conf import settings
-from dataset.voc2012 import VOC2012Aug
+# from dataset.voc2012 import VOC2012Aug
 from lr_scheduler import PolynomialLR, WarmUpLR, WarmUpWrapper
 from metric import eval_metrics, gland_accuracy_object_level
 from dataloader import IterLoader
@@ -811,9 +811,9 @@ def evaluate(net, val_dataloader, args):
 if __name__ == '__main__':
 
 
-    # from gpustats import GPUStats
-    # gpu_stats = GPUStats(gpus_needed=1, sleep_time=10, exec_thresh=3, max_gpu_mem_avail=0.01, max_gpu_util=0.01)
-    # gpu_stats.run()
+    #from gpustats import GPUStats
+    #gpu_stats = GPUStats(gpus_needed=1, sleep_time=60 * 5, exec_thresh=3, max_gpu_mem_avail=0.01, max_gpu_util=0.01)
+    #gpu_stats.run()
 
 
     parser = argparse.ArgumentParser()
@@ -940,15 +940,21 @@ if __name__ == '__main__':
     #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Saturday_18_March_2023_22h_57m_50s/iter_39999.pt'
 
     # test_CRCTP
-    ckpt_path = '/data/hdd1/by/mmclassification/work_dirs/gland/latest.pth'
+    #ckpt_path = '/data/hdd1/by/mmclassification/work_dirs/gland/latest.pth'
 
+    # eish + crag
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Saturday_25_March_2023_23h_38m_31s/iter_39999.pt'
+
+    # eish + crag + glas
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Sunday_26_March_2023_17h_48m_38s/iter_39999.pt'
+    ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Saturday_25_March_2023_23h_51m_46s/iter_39999.pt'
     # glas+crag+rings+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin_rings_densecl/latest.pth'
     # glas+crag+sin+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin/latest.pth'
     print('Loading pretrained checkpoint from {}'.format(ckpt_path))
-    new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path)['state_dict'])
-    #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path))
+    #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path)['state_dict'])
+    new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path))
     net.load_state_dict(new_state_dict)
     print('Done!')
 

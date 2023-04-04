@@ -17,6 +17,8 @@ import numpy as np
 import torch
 import torchvision.transforms.functional as F
 from PIL import Image, ImageEnhance
+from albumentations.augmentations.geometric.transforms import ElasticTransform
+from albumentations.augmentations.geometric.rotate import RandomRotate90
 
 _cv2_pad_to_str = {
     'constant': cv2.BORDER_CONSTANT,
@@ -83,44 +85,48 @@ class Resize:
             else:
                 raise TypeError('size should be iterable with size 2 or int')
 
-        # elif range:
-            # raise ValueError(' size and range should be set least one')
-
-        # print(range, size)
-        # assert  range is not None and size is None
-        #if not (range is None) ^ (size is None):
-            #raise ValueError('can not both be set or not set')
 
         self.size = size
         self.range = range
         self.keep_ratio = keep_ratio
         self.min_size = min_size
 
-    # def random
 
     def __call__(self, img, mask, weight_map=None):
 
-        # size = self.size
+
+        if self.size is not None:
+            h, w = self.size
+            # size = (w, h)
+        else:
+            h, w = img.shape[:2]
+            # size = (w, h)
+
 
 
 
         if self.range:
             ratio = random.uniform(*self.range)
-            resized_img = cv2.resize(img, (0, 0), fx=ratio, fy=ratio)
-            resized_mask = cv2.resize(mask, (0, 0), fx=ratio, fy=ratio, interpolation=cv2.INTER_NEAREST)
-            if weight_map is not None:
-                weight_map = cv2.resize(weight_map, (0, 0), fx=ratio, fy=ratio)
-
-        if self.size:
-            h, w = self.size
-            size = (w, h)
+            #size = (x * ratio for x in size)
+            size = (int(w * ratio), int(h * ratio))
+            #resized_img = cv2.resize(img, (0, 0), fx=ratio, fy=ratio)
+            #resized_mask = cv2.resize(mask, (0, 0), fx=ratio, fy=ratio, interpolation=cv2.INTER_NEAREST)
             resized_img = cv2.resize(img, size)
             resized_mask = cv2.resize(mask, size, interpolation=cv2.INTER_NEAREST)
+
             if weight_map is not None:
+                # weight_map = cv2.resize(weight_map, (0, 0), fx=ratio, fy=ratio)
                 weight_map = cv2.resize(weight_map, size)
 
+        # if self.size:
+        #     h, w = self.size
+        #     size = (w, h)
+        #     resized_img = cv2.resize(img, size)
+        #     resized_mask = cv2.resize(mask, size, interpolation=cv2.INTER_NEAREST)
+        #     if weight_map is not None:
+        #         weight_map = cv2.resize(weight_map, size)
+
         if self.keep_ratio:
-            #print(self.min_size)
             if self.min_size is not None:
                 h, w = img.shape[:2]
                 #print(h, w)
@@ -137,10 +143,23 @@ class Resize:
                 if weight_map is not None:
                     weight_map = cv2.resize(weight_map, (int(new_w), int(new_h)))
         # print(np.unique(resized_mask))
+        assert resized_img.shape[:2] == resized_mask.shape[:2]
+
+        # print(resized_img.shape[0] / img.shape[0], resized_img.shape, img.shape)
+        # print(resized_img.shape[1] / img.shape[1])
         if weight_map is not None:
+            assert resized_img.shape[:2] == weight_map.shape[:2]
             return resized_img, resized_mask, weight_map
         else:
             return resized_img, resized_mask
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        repr_str += (f'(size={self.size}, '
+                    #  f'multiscale_mode={self.multiscale_mode}, '
+                     f'range={self.range}, '
+                     f'keep_ratio={self.keep_ratio})')
+        return repr_str
 
 def crop(img, i, j, h, w):
     """Crop the given PIL Image.
@@ -156,8 +175,6 @@ def crop(img, i, j, h, w):
     if not _is_numpy_image(img):
         raise TypeError('img should be numpy image. Got {}'.format(type(img)))
 
-    # print(type(img))
-    # mg[i:i + h, j: j+ w, ...]
     return img[i:i + h, j: j+ w, ...]
 
     # print(type(tmp), 'cccc')
@@ -297,8 +314,9 @@ class RandomCrop(object):
                 pad_if_needed=False,
                 pad_value=0,
                 seg_pad_value=255,
-                cat_max_ratio=1.):
-                #  padding_mode='constant'):
+                cat_max_ratio=1.,
+                padding_mode='reflect'
+                ):
         if isinstance(crop_size, numbers.Number):
             self.crop_size = (int(crop_size), int(crop_size))
         else:
@@ -306,7 +324,7 @@ class RandomCrop(object):
         # self.padding = padding
         self.pad_if_needed = pad_if_needed
         # self.fill = fill
-        # self.padding_mode = padding_mode
+        self.padding_mode = padding_mode
         self.pad_value= pad_value
         self.seg_pad_value = seg_pad_value
         #self.ignore_value = ignore_value,
@@ -350,18 +368,18 @@ class RandomCrop(object):
             #img = pad(img, (self.size[1] - img.shape[1], 0), self.fill,
             #            self.padding_mode)
             img = pad(img, (left_pad, 0, right_pad, 0), self.pad_value,
-                        # self.padding_mode)
-                        'constant')
+                        self.padding_mode)
+                        # 'constant')
 
             if weight_map is not None:
                 weight_map = pad(weight_map, (left_pad, 0, right_pad, 0), self.pad_value,
-                        # self.padding_mode)
-                        'constant')
+                        self.padding_mode)
+                        # 'constant')
             #mask = pad(mask, (self.size[1] - mask.shape[1], 0), self.fill,
             #            self.padding_mode)
             mask = pad(mask, (left_pad, 0, right_pad, 0), self.seg_pad_value,
-                        # self.padding_mode)
-                        'constant')
+                        self.padding_mode)
+                        # 'constant')
         # pad the height if needed
         if self.pad_if_needed and img.shape[0] < self.crop_size[0]:
             top_pad = int((self.crop_size[0] - img.shape[0]) / 2)
@@ -371,18 +389,19 @@ class RandomCrop(object):
             #mask = pad(mask, (0, self.size[0] - mask.shape[0]), self.fill,
             #            self.padding_mode)
             img = pad(img, (0, top_pad, 0, bot_pad), self.pad_value,
-                        'constant')
+                        self.padding_mode)
+                        # 'constant')
             mask = pad(mask, (0, top_pad, 0, bot_pad), self.seg_pad_value,
-                        # self.padding_mode)
-                        'constant')
+                        self.padding_mode)
+                        #'constant')
 
             if weight_map is not None:
                 weight_map = pad(weight_map, (0, top_pad, 0, bot_pad), self.pad_value,
-                        'constant')
+                        self.padding_mode)
+                        # 'constant')
 
         #print(self.pad_if_needed)
         i, j, h, w = self.get_params(img, self.crop_size)
-
 
 
 
@@ -411,27 +430,42 @@ class RandomCrop(object):
 
         #        i, j, h, w = self.get_params(img, self.crop_size)
 
+        # assert all background image
+        assert mask[mask != self.seg_pad_value].sum() != 0
+
+
 
         bbox = crop(mask, i, j, h, w)
-        if self.cat_max_ratio < 1.:
+        # if self.cat_max_ratio < 1.:
             # Repeat 10 times
-            #for iidx in range(1000):
-            while True:
+        tmp_cmr = self.cat_max_ratio
+        for iidx in range(1, 1000):
+            #while True:
+                # print(i, j, h, w)
                 bbox = crop(mask, i, j, h, w)
+                # cc = bbox.copy()
+                # cc[cc == 1] = 200
+                # cv2.imwrite('tmp2/bbox{}.png'.format(iidx), cc)
                 labels, cnt = np.unique(bbox, return_counts=True)
                 cnt = cnt[labels != self.seg_pad_value]
                 #print(iidx, cnt, np.max(cnt) / np.sum(cnt), i, j)
+                # print(cnt, np.max(cnt) / np.sum(cnt), i, j)
+                # print(min(tmp_cmr, 1), iidx)
                 if len(cnt) > 1 and 0.1 < np.max(cnt) / np.sum(
-                        cnt) < self.cat_max_ratio:
+                        cnt) < min(tmp_cmr, 1):
                     break
                 i, j, h, w = self.get_params(img, self.crop_size)
 
-                #if len(cnt) == 1 and iidx == 999:
-                #    cv2.imwrite('img.jpg', img)
-                #    cv2.imwrite('mask.png', mask)
-                #    print(np.max(cnt) / np.sum(cnt))
-                #    raise ValueError('still no pixels of class???')
+                if iidx % 20 == 0:
+                    tmp_cmr += 0.1
 
+
+
+                if len(cnt) == 1 and iidx == 999:
+                    cv2.imwrite('img.jpg', img)
+                    cv2.imwrite('mask.png', mask * 255)
+                    print(np.max(cnt) / np.sum(cnt))
+                    raise ValueError('still no pixels of class???')
 
         img = crop(img, i, j, h, w)
 
@@ -520,7 +554,7 @@ class RandomCrop(object):
 #        return img, mask
 
 
-def rotate(img, angle, resample='BILINEAR', expand=False, center=None, value=0):
+def rotate(img, angle, resample='BILINEAR', border_mode=cv2.BORDER_REFLECT_101, expand=False, center=None, value=0):
     """Rotate the image by angle.
     Args:
         img (PIL Image): PIL Image to be rotated.
@@ -545,6 +579,7 @@ def rotate(img, angle, resample='BILINEAR', expand=False, center=None, value=0):
     point = center or (w/2, h/2)
     M = cv2.getRotationMatrix2D(point, angle=-angle, scale=1)
 
+
     if expand:
         if center is None:
             cos = np.abs(M[0, 0])
@@ -559,7 +594,7 @@ def rotate(img, angle, resample='BILINEAR', expand=False, center=None, value=0):
             M[1, 2] += (nH / 2) - point[1]
 
             # perform the actual rotation and return the image
-            dst = cv2.warpAffine(img, M, (nW, nH), flags=INTER_MODE[resample], borderValue=value)
+            dst = cv2.warpAffine(img, M, (nW, nH), flags=INTER_MODE[resample], borderValue=value, borderMode=border_mode)
         else:
             xx = []
             yy = []
@@ -572,10 +607,9 @@ def rotate(img, angle, resample='BILINEAR', expand=False, center=None, value=0):
             # adjust the rotation matrix to take into account translation
             M[0, 2] += (nw - w)/2
             M[1, 2] += (nh - h)/2
-            dst = cv2.warpAffine(img, M, (nw, nh), flags=INTER_MODE[resample], borderValue=value)
+            dst = cv2.warpAffine(img, M, (nw, nh), flags=INTER_MODE[resample],  borderMode=border_mode, borderValue=value)
     else:
-        # print('cccccc')
-        dst = cv2.warpAffine(img, M, (w, h), flags=INTER_MODE[resample], borderValue=value)
+        dst = cv2.warpAffine(img, M, (w, h), flags=INTER_MODE[resample], borderValue=value,  borderMode=border_mode)
     return dst.astype(imgtype)
 
 class RandomRotation(object):
@@ -597,7 +631,7 @@ class RandomRotation(object):
             Default is the center of the image.
     """
 
-    def __init__(self, degrees, p=0.5, resample='BILINEAR', expand=False, center=None, pad_value=0, seg_pad_value=255):
+    def __init__(self, degrees, p=0.5, resample='BILINEAR', expand=False, center=None, border_mode=cv2.BORDER_REFLECT_101, pad_value=0, seg_pad_value=255):
         if isinstance(degrees, numbers.Number):
             if degrees < 0:
                 raise ValueError("If degrees is a single number, it must be positive.")
@@ -613,6 +647,7 @@ class RandomRotation(object):
         self.pad_value = pad_value
         self.seg_pad_value = seg_pad_value
         self.p = p
+        self.border_mode = border_mode
 
     @staticmethod
     def get_params(degrees):
@@ -641,11 +676,35 @@ class RandomRotation(object):
 
         angle = self.get_params(self.degrees)
 
-        img = rotate(img, angle, self.resample, self.expand, self.center, value=self.pad_value)
-        mask = rotate(mask, angle, 'NEAREST', self.expand, self.center, value=self.seg_pad_value)
+        #img = rotate(img, angle, self.resample, self.expand, self.center, value=self.pad_value)
+        #mask = rotate(mask, angle, 'NEAREST', self.expand, self.center, value=self.seg_pad_value)
+        img = rotate(
+            img,
+            angle,
+            resample=self.resample,
+            expand=self.expand,
+            center=self.center,
+            border_mode=self.border_mode,
+            value=self.pad_value)
+        mask = rotate(
+            mask,
+            angle,
+            resample='NEAREST',
+            expand=self.expand,
+            center=self.center,
+            border_mode=self.border_mode,
+            value=self.seg_pad_value)
 
         if weight_map is not None:
-            weight_map = rotate(weight_map, angle, self.resample, self.expand, self.center, value=self.pad_value)
+            # weight_map = rotate(weight_map, angle, self.resample, self.expand, self.center, value=self.pad_value)
+            weight_map = rotate(
+                weight_map,
+                angle,
+                resample=self.resample,
+                expand=self.expand,
+                center=self.center,
+                border_mode=self.border_mode,
+                value=self.pad_value)
 
         if weight_map is not None:
             return img, mask, weight_map
@@ -720,6 +779,346 @@ class RandomApply(torch.nn.Module):
         return format_string
 
 
+
+
+# class MyElasticTransform(ElasticTransform):
+
+class MyElasticTransform(ElasticTransform):
+    """Elastic deformation of images as described in [Simard2003]_ (with modifications).
+    Based on https://gist.github.com/ernestum/601cdf56d2b424757de5
+
+    .. [Simard2003] Simard, Steinkraus and Platt, "Best Practices for
+         Convolutional Neural Networks applied to Visual Document Analysis", in
+         Proc. of the International Conference on Document Analysis and
+         Recognition, 2003.
+
+    Args:
+        alpha (float):
+        sigma (float): Gaussian filter parameter.
+        alpha_affine (float): The range will be (-alpha_affine, alpha_affine)
+        interpolation (OpenCV flag): flag that is used to specify the interpolation algorithm. Should be one of:
+            cv2.INTER_NEAREST, cv2.INTER_LINEAR, cv2.INTER_CUBIC, cv2.INTER_AREA, cv2.INTER_LANCZOS4.
+            Default: cv2.INTER_LINEAR.
+        border_mode (OpenCV flag): flag that is used to specify the pixel extrapolation method. Should be one of:
+            cv2.BORDER_CONSTANT, cv2.BORDER_REPLICATE, cv2.BORDER_REFLECT, cv2.BORDER_WRAP, cv2.BORDER_REFLECT_101.
+            Default: cv2.BORDER_REFLECT_101
+        value (int, float, list of ints, list of float): padding value if border_mode is cv2.BORDER_CONSTANT.
+        mask_value (int, float,
+                    list of ints,
+                    list of float): padding value if border_mode is cv2.BORDER_CONSTANT applied for masks.
+        approximate (boolean): Whether to smooth displacement map with fixed kernel size.
+                               Enabling this option gives ~2X speedup on large images.
+        same_dxdy (boolean): Whether to use same random generated shift for x and y.
+                             Enabling this option gives ~2X speedup.
+
+    Targets:
+        image, mask, bbox
+
+    Image types:
+        uint8, float32
+    """
+
+    def __init__(
+        self,
+        alpha=1,
+        alpha_range=(80, 120),
+        sigma=50,
+        sigma_range=(9, 11),
+        alpha_affine=50,
+        interpolation=cv2.INTER_LINEAR,
+        border_mode=cv2.BORDER_REFLECT_101,
+        value=None,
+        mask_value=None,
+        always_apply=False,
+        approximate=False,
+        same_dxdy=False,
+        p=0.5,
+    ):
+        super(ElasticTransform, self).__init__(always_apply, p)
+        self.alpha = alpha
+        self.alpha_affine = alpha_affine
+        self.sigma = sigma
+        self.interpolation = interpolation
+        self.border_mode = border_mode
+        self.value = value
+        self.mask_value = mask_value
+        self.approximate = approximate
+        self.same_dxdy = same_dxdy
+        self.sigma_range = sigma_range
+        self.alpha_range = alpha_range
+
+    @property
+    def targets(self):
+        return {
+            "image": self.apply,
+            "mask": self.apply_to_mask,
+            "masks": self.apply_to_masks,
+            "bboxes": self.apply_to_bboxes,
+            "keypoints": self.apply_to_keypoints,
+            "weightmap": self.apply_to_weightmap,
+        }
+
+    def get_params(self):
+        self.alpha = random.randint(*self.alpha_range)
+        self.sigma = random.uniform(*self.sigma_range)
+        return {"random_state": random.randint(0, 10000)}
+
+    def apply_to_weightmap(self, img, random_state=None, interpolation=cv2.INTER_LINEAR, **params):
+        return self.apply(
+            img,
+            random_state,
+            interpolation,
+            **params,
+        )
+
+    def get_transform_init_args_names(self):
+        return (
+            "alpha",
+            "alpha_range",
+            "sigma",
+            "sigma_range",
+            "alpha_affine",
+            "interpolation",
+            "border_mode",
+            "value",
+            "mask_value",
+            "approximate",
+            "same_dxdy",
+        )
+
+
+    def trans(self, *args, force_apply: bool = False, **kwargs):
+        if args:
+            raise KeyError("You have to pass data to augmentations as named arguments, for example: aug(image=image)")
+        if self.replay_mode:
+            if self.applied_in_replay:
+                return self.apply_with_params(self.params, **kwargs)
+
+            return kwargs
+
+        if (random.random() < self.p) or self.always_apply or force_apply:
+            params = self.get_params()
+
+            if self.targets_as_params:
+                assert all(key in kwargs for key in self.targets_as_params), "{} requires {}".format(
+                    self.__class__.__name__, self.targets_as_params
+                )
+                targets_as_params = {k: kwargs[k] for k in self.targets_as_params}
+                params_dependent_on_targets = self.get_params_dependent_on_targets(targets_as_params)
+                params.update(params_dependent_on_targets)
+            if self.deterministic:
+                if self.targets_as_params:
+                    warn(
+                        self.get_class_fullname() + " could work incorrectly in ReplayMode for other input data"
+                        " because its' params depend on targets."
+                    )
+                kwargs[self.save_key][id(self)] = deepcopy(params)
+            return self.apply_with_params(params, **kwargs)
+
+        return kwargs
+
+    def __call__(self, img, mask, weight_map=None):
+        """
+            img (np.ndarray): Image to be rotated.
+        Returns:
+            np.ndarray: Rotated image.
+        """
+
+        # if random.random() > self.p:
+        #     if weight_map is not None:
+        #         return img, mask, weight_map
+        #     else:
+        #         return img, mask
+        ori_img = img.copy()
+        ori_mask = mask.copy()
+        if weight_map is not None:
+            ori_weight_map = weight_map.copy()
+
+        if weight_map is not None:
+            # before = (mask == 1).sum()
+            output = self.trans(image=img, mask=mask, weightmap=weight_map)
+            img = output.get('image')
+            mask = output.get('mask')
+            #after = (mask == 1).sum()
+            # if before == 0 or after == 0:
+                # print(before, after)
+            weight_map = output.get('weightmap')
+
+            if mask[mask != self.mask_value].sum() == 0:
+                print('here')
+                return ori_img, ori_mask, ori_weight_map
+
+            return img, mask, weight_map
+
+        else:
+            output = self.trans(image=img, mask=mask)
+            img = output.get('image')
+            mask = output.get('mask')
+
+            if mask[mask != self.mask_value].sum() == 0:
+                print('here')
+                return ori_img, ori_mask
+
+            # weight_map = output.get('weightmap')
+            return img, mask
+
+class ElasticTransformWrapper:
+    def __init__(
+        self,
+        alpha=1,
+        alpha_range=(80, 120),
+        sigma=50,
+        sigma_range=(9, 11),
+        alpha_affine=50,
+        interpolation=cv2.INTER_LINEAR,
+        border_mode=cv2.BORDER_REFLECT_101,
+        value=None,
+        mask_value=None,
+        always_apply=False,
+        approximate=False,
+        same_dxdy=False,
+        p=0.5,
+    ):
+        self.trans = MyElasticTransform(
+            alpha=alpha,
+            alpha_range=alpha_range,
+            sigma=sigma,
+            sigma_range=sigma_range,
+            alpha_affine=alpha_affine,
+            interpolation=interpolation,
+            border_mode=border_mode,
+            value=value,
+            mask_value=mask_value,
+            always_apply=always_apply,
+            approximate=approximate,
+            same_dxdy=same_dxdy,
+            p=p,
+        )
+
+    def __call__(self, img, mask, weight_map=None):
+        """
+            img (np.ndarray): Image to be rotated.
+        Returns:
+            np.ndarray: Rotated image.
+        """
+
+        # if random.random() > self.p:
+        #     if weight_map is not None:
+        #         return img, mask, weight_map
+        #     else:
+        #         return img, mask
+
+        if weight_map is not None:
+            output = self.trans(image=img, mask=mask, weightmap=weight_map)
+            img = output.get('image')
+            mask = output.get('mask')
+            weight_map = output.get('weightmap')
+
+            return img, mask, weight_map
+
+        else:
+
+            output = self.trans(image=img, mask=mask)
+            img = output.get('image')
+            mask = output.get('mask')
+            # weight_map = output.get('weightmap')
+            return img, mask
+
+    def __repr__(self):
+        return repr(self.trans)
+
+class MyRotate90(RandomRotate90):
+
+    @property
+    def targets(self):
+        return {
+            "image": self.apply,
+            "mask": self.apply_to_mask,
+            "masks": self.apply_to_masks,
+            "bboxes": self.apply_to_bboxes,
+            "keypoints": self.apply_to_keypoints,
+            "weightmap": self.apply_to_weightmap,
+        }
+
+    # def get_params(self):
+        # self.alpha = random.randint(*self.alpha_range)
+        # self.sigma = random.uniform(*self.sigma_range)
+        # return {"random_state": random.randint(0, 10000)}
+
+    def apply(self, img, factor=0, **params):
+        """
+        Args:
+            factor (int): number of times the input will be rotated by 90 degrees.
+        """
+        return np.ascontiguousarray(np.rot90(img, factor))
+
+
+    def apply_to_weightmap(
+       self, img, factor=0, **params
+    ):
+        return self.apply(
+            img,
+            factor,
+            **params
+        )
+
+    def get_params(self):
+        # Random int in the range [0, 3]
+        return {"factor": 1}
+
+
+    def trans(self, *args, force_apply: bool = False, **kwargs):
+        if args:
+            raise KeyError("You have to pass data to augmentations as named arguments, for example: aug(image=image)")
+        if self.replay_mode:
+            if self.applied_in_replay:
+                return self.apply_with_params(self.params, **kwargs)
+
+            return kwargs
+
+        if (random.random() < self.p) or self.always_apply or force_apply:
+            params = self.get_params()
+
+            if self.targets_as_params:
+                assert all(key in kwargs for key in self.targets_as_params), "{} requires {}".format(
+                    self.__class__.__name__, self.targets_as_params
+                )
+                targets_as_params = {k: kwargs[k] for k in self.targets_as_params}
+                params_dependent_on_targets = self.get_params_dependent_on_targets(targets_as_params)
+                params.update(params_dependent_on_targets)
+            if self.deterministic:
+                if self.targets_as_params:
+                    warn(
+                        self.get_class_fullname() + " could work incorrectly in ReplayMode for other input data"
+                        " because its' params depend on targets."
+                    )
+                kwargs[self.save_key][id(self)] = deepcopy(params)
+            return self.apply_with_params(params, **kwargs)
+
+        return kwargs
+
+    def __call__(self, img, mask, weight_map=None):
+        """
+            img (np.ndarray): Image to be rotated.
+        Returns:
+            np.ndarray: Rotated image.
+        """
+
+        if weight_map is not None:
+            output = self.trans(image=img, mask=mask, weightmap=weight_map)
+            img = output.get('image')
+            mask = output.get('mask')
+            weight_map = output.get('weightmap')
+
+            return img, mask, weight_map
+
+        else:
+
+            output = self.trans(image=img, mask=mask)
+            img = output.get('image')
+            mask = output.get('mask')
+            return img, mask
+
 #class RandomRotation:
 #    """Rotate the image by angle
 #
@@ -785,6 +1184,9 @@ class RandomVerticalFlip:
         else:
             return img, mask
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(p={self.p})"
+
 class RandomHorizontalFlip:
     """Horizontally flip the given opencv image with given probability p.
     and does the same to mask
@@ -812,6 +1214,9 @@ class RandomHorizontalFlip:
             return img, mask, weight_map
         else:
             return img, mask
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(p={self.p})"
 
 class RandomGaussianBlur:
     """Blur an image using gaussian blurring.
@@ -1136,6 +1541,8 @@ class ToTensor:
         else:
             return img, mask
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}()"
 
 class Normalize:
     """Normalize a torch tensor (H, W, BGR order) with mean and standard deviation
@@ -1188,6 +1595,8 @@ class Normalize:
         else:
             return img, mask
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(mean={self.mean}, std={self.std})"
 
 #class Normalize:
 #    """Normalize a torch tensor (H, W, BGR order) with mean and standard deviation
@@ -1319,15 +1728,15 @@ class MultiScaleFlipAug(object):
                  mean,
                  std,
                  transforms=None,
-                 flip=False,
+                #  flip=False,
                  min_size=None,
-                 flip_direction='horizontal',
+                 flip_direction='h',
                  resize_to_multiple=True):
 
         img_ratios = img_ratios if isinstance(img_ratios,
                                                   list) else [img_ratios]
 
-        self.flip = flip
+        # self.flip = flip
         self.img_ratios = img_ratios
         self.flip_direction = flip_direction if isinstance(
             flip_direction, list) else [flip_direction]
@@ -1344,11 +1753,10 @@ class MultiScaleFlipAug(object):
         #self.my_trans = my_transforms.get_transforms(param_dict)
 
         for flip_direction in self.flip_direction:
-            assert flip_direction in ['v', 'h', 'hv', 'r90']
+            assert flip_direction in ['none', 'v', 'h', 'hv', 'r90', 'r90h', 'r90v', 'r90hv']
 
         self.mean = torch.tensor(mean, dtype=torch.float32)
         self.std = torch.tensor(std, dtype=torch.float32)
-        # print(self.flip_direction, 'cccccccccccccccccccccccccc')
         if resize_to_multiple:
             self.resize_to_multiple = ResizeToMultiple(
                 interpolation=cv2.INTER_LINEAR,
@@ -1360,7 +1768,8 @@ class MultiScaleFlipAug(object):
 
     def __repr__(self):
         repr_str = self.__class__.__name__
-        repr_str += (f'(flip={self.flip}, '
+        repr_str += (
+                    #  f'(flip={self.flip}, '
                      f'img_ratios={self.img_ratios}), '
                      f'resize_to_multiple={self.if_resize_to_multiple}), '
                      f'min_size={self.min_size}), '
@@ -1385,9 +1794,7 @@ class MultiScaleFlipAug(object):
                 flip_direction.append(flip_direct)
 
 
-        # print(flip_aug, flip_direction)
         assert len(flip_aug) == len(flip_direction)
-        #print(flip_aug, flip_direction)
 
         return list(zip(flip_aug, flip_direction))
 
@@ -1434,11 +1841,12 @@ class MultiScaleFlipAug(object):
             "flip" : []
         }
 
-        flip_param = self.construct_flip_param()
+        # flip_param = self.construct_flip_param()
 
+
+        # short side is 480
         if self.min_size is not None:
             h, w = img.shape[:2]
-            #print(h, w)
             if h < w:
                 new_h = self.min_size
                 new_w = w / h * new_h
@@ -1446,46 +1854,84 @@ class MultiScaleFlipAug(object):
                 new_w = self.min_size
                 new_h =  h / w * new_w
 
-            #print(new_w, new_h)
             img = cv2.resize(img, (int(new_w), int(new_h)))
-        # print(np.unique(resized_mask))
-        #return resized_img, resized_mask
 
 
+        # long side is 480
+        # print(img.shape)
+        # if self.min_size is not None:
+        #     h, w = img.shape[:2]
+        #     if h > w:
+        #         new_h = self.min_size
+        #         new_w = w / h * new_h
+        #     else:
+        #         new_w = self.min_size
+        #         new_h =  h / w * new_w
+
+        #     img = cv2.resize(img, (int(new_w), int(new_h)))
+
+        # print(img.shape, '1')
 
         for ratio in self.img_ratios:
 
+            # print(img.shape)
             resized_img = cv2.resize(img, (0, 0), fx=ratio, fy=ratio)
+            # print(resized_img.shape, ratio)
 
             if self.if_resize_to_multiple:
                 resized_img = self.resize_to_multiple(resized_img)
 
-            for flip, direction in flip_param:
-                #print(flip, direction)
+            # for flip, direction in flip_param:
 
-                if flip:
+            for direction in self.flip_direction:
+
+                # if flip:
 
                     #if direction == 'horizontal':
-                    if direction == 'h':
-                        flipped_img = cv2.flip(resized_img, 1)
-                        img_meta['flip'].append(direction)
+                if direction == 'h':
+                    flipped_img = cv2.flip(resized_img, 1)
+                    img_meta['flip'].append(direction)
 
-                    #if direction == 'vertical':
-                    if direction == 'v':
-                        flipped_img = cv2.flip(resized_img, 0)
-                        img_meta['flip'].append(direction)
+                #if direction == 'vertical':
+                if direction == 'v':
+                    flipped_img = cv2.flip(resized_img, 0)
+                    img_meta['flip'].append(direction)
 
-                    if direction == 'hv':
-                        flipped_img = cv2.flip(resized_img, 1)
-                        flipped_img = cv2.flip(flipped_img, 0)
-                        img_meta['flip'].append(direction)
+                if direction == 'hv':
+                    flipped_img = cv2.flip(resized_img, 1)
+                    flipped_img = cv2.flip(flipped_img, 0)
+                    img_meta['flip'].append(direction)
 
-                    if direction == 'r90':
-                        flipped_img = cv2.rotate(resized_img, cv2.ROTATE_90_CLOCKWISE)
-                        img_meta['flip'].append(direction)
-                else:
-                    img_meta['flip'].append('none')
+                # if direction == 'vh':
+                #     flipped_img = cv2.flip(resized_img, 0)
+                #     flipped_img = cv2.flip(flipped_img, 1)
+                #     img_meta['flip'].append(direction)
+
+                if direction == 'r90':
+                    flipped_img = cv2.rotate(resized_img, cv2.ROTATE_90_CLOCKWISE)
+                    img_meta['flip'].append(direction)
+
+                if direction == 'r90h':
+                    flipped_img = cv2.rotate(resized_img, cv2.ROTATE_90_CLOCKWISE)
+                    flipped_img = cv2.flip(flipped_img, 1)
+                    img_meta['flip'].append(direction)
+
+                if direction == 'r90v':
+                    flipped_img = cv2.rotate(resized_img, cv2.ROTATE_90_CLOCKWISE)
+                    flipped_img = cv2.flip(flipped_img, 0)
+                    img_meta['flip'].append(direction)
+
+                if direction == 'r90hv':
+                    flipped_img = cv2.rotate(resized_img, cv2.ROTATE_90_CLOCKWISE)
+                    flipped_img = cv2.flip(flipped_img, 1)
+                    flipped_img = cv2.flip(flipped_img, 0)
+                    img_meta['flip'].append(direction)
+
+
+            # else:
+                if direction == 'none':
                     flipped_img = resized_img
+                    img_meta['flip'].append(direction)
 
                 img_tensor = self.img_to_tensor(flipped_img)
                 norm_img = self.norm(img_tensor)
@@ -1499,7 +1945,6 @@ class MultiScaleFlipAug(object):
                 # normalize + to_tensor
                 # if self.transforms is not None:
                     # for trans in self.transforms:
-                        # print(type(gt_seg), trans)
                         # flipped_img, gt_seg = trans(flipped_img, gt_seg)
                 img_meta['imgs'].append(norm_img)
                 #img_meta['imgs'].append(flipped_img)
@@ -1991,6 +2436,7 @@ def elastic_transform(
 
     matrix = cv2.getAffineTransform(pts1, pts2)
 
+
     #warp_fn = _maybe_process_in_chunks(
     #    cv2.warpAffine, M=matrix, dsize=(width, height), flags=interpolation, borderMode=border_mode, borderValue=value
     #)
@@ -2044,118 +2490,126 @@ def elastic_transform(
     return img
 
 
-class ElasticTransform:
-    def __init__(
-        self,
-        alpha=1,
-        sigma=50,
-        alpha_affine=50,
-        # border_mode=cv2.BORDER_REFLECT_101,
-        same_dxdy=False,
-        pad_value=0,
-        seg_pad_value=255,
-        p=0.5,
-    ):
-
-        self.alpha = alpha
-        self.p = p
-        self.sigma = sigma
-        self.alpha_affine = alpha_affine
-        self.seg_pad_value = seg_pad_value
-        self.pad_value = pad_value
-        self.same_dxdy = same_dxdy
-        # interpolation=cv2.INTER_LINEAR,
-
-    def __repr__(self):
-        return self.__class__.__name__ + \
-            '(alpha={})'.format(self.alpha) + \
-            '(sigma={})'.format(self.sigma) + \
-            '(alpha_affine={})'.format(self.alpha_affine) + \
-            '(p={})'.format(self.p)
-
-
-    def __call__(self, img, seg_map, weight_map=None):
-
-        #if weight_map is not None:
-        if random.random() > self.p:
-            if weight_map is not None:
-                return img, seg_map, weight_map
-            else:
-                return img, seg_map
-
-        #else:
-        #    if random.random() > self.p:
-        #        return img, seg_map
-
-        height, width = img.shape[:2]
-
-        # Random affine
-        center_square = np.array((height, width), dtype=np.float32) // 2
-        square_size = min((height, width)) // 3
-        pts1 = np.array(
-            [
-                center_square + square_size,
-                [center_square[0] + square_size, center_square[1] - square_size],
-                center_square - square_size,
-            ],
-            dtype=np.float32,
-        )
-        alpha_affine = float(self.alpha_affine)
-        pts2 = pts1 + np.random.uniform(-alpha_affine, alpha_affine, size=pts1.shape).astype(np.float32)
-
-        img = elastic_transform(
-            img=img,
-            alpha=self.alpha,
-            sigma=self.sigma,
-            alpha_affine=self.alpha_affine,
-            pts1=pts1,
-            pts2=pts2,
-            interpolation=cv2.INTER_LINEAR,
-            #interpolation=cv2.INTER_NEAREST,
-            value=self.pad_value,
-            same_dxdy=self.same_dxdy)
-
-        seg_map = elastic_transform(
-            img=seg_map,
-            alpha=self.alpha,
-            sigma=self.sigma,
-            alpha_affine=self.alpha_affine,
-            pts1=pts1,
-            pts2=pts2,
-            interpolation=cv2.INTER_NEAREST,
-            value=self.seg_pad_value,
-            same_dxdy=self.same_dxdy
-        )
-
-        if weight_map is not None:
-            weight_map = elastic_transform(
-            img=weight_map,
-            alpha=self.alpha,
-            sigma=self.sigma,
-            alpha_affine=self.alpha_affine,
-            pts1=pts1,
-            pts2=pts2,
-            interpolation=cv2.INTER_LINEAR,
-            #interpolation=cv2.INTER_NEAREST,
-            value=self.pad_value,
-            same_dxdy=self.same_dxdy)
-
-        if weight_map is not None:
-            return img, seg_map, weight_map
-        else:
-            return img, seg_map
+#class ElasticTransform:
+#    def __init__(
+#        self,
+#        alpha=1,
+#        sigma=50,
+#        alpha_affine=50,
+#        # border_mode=cv2.BORDER_REFLECT_101,
+#        same_dxdy=False,
+#        pad_value=0,
+#        seg_pad_value=255,
+#        p=0.5,
+#    ):
+#
+#        self.alpha = alpha
+#        self.p = p
+#        self.sigma = sigma
+#        self.alpha_affine = alpha_affine
+#        self.seg_pad_value = seg_pad_value
+#        self.pad_value = pad_value
+#        self.same_dxdy = same_dxdy
+#        # interpolation=cv2.INTER_LINEAR,
+#
+#    def __repr__(self):
+#        return self.__class__.__name__ + \
+#            '(alpha={})'.format(self.alpha) + \
+#            '(sigma={})'.format(self.sigma) + \
+#            '(alpha_affine={})'.format(self.alpha_affine) + \
+#            '(p={})'.format(self.p)
+#
+#
+#    def __call__(self, img, seg_map, weight_map=None):
+#
+#        #if weight_map is not None:
+#        if random.random() > self.p:
+#            if weight_map is not None:
+#                return img, seg_map, weight_map
+#            else:
+#                return img, seg_map
+#
+#        #else:
+#        #    if random.random() > self.p:
+#        #        return img, seg_map
+#
+#        height, width = img.shape[:2]
+#
+#        # Random affine
+#        center_square = np.array((height, width), dtype=np.float32) // 2
+#        square_size = min((height, width)) // 3
+#        pts1 = np.array(
+#            [
+#                center_square + square_size,
+#                [center_square[0] + square_size, center_square[1] - square_size],
+#                center_square - square_size,
+#            ],
+#            dtype=np.float32,
+#        )
+#        alpha_affine = float(self.alpha_affine)
+#
+#
+#        pts2 = pts1 + np.random.uniform(-alpha_affine, alpha_affine, size=pts1.shape).astype(np.float32)
+#
+#        img = elastic_transform(
+#            img=img,
+#            alpha=self.alpha,
+#            sigma=self.sigma,
+#            alpha_affine=self.alpha_affine,
+#            pts1=pts1,
+#            pts2=pts2,
+#            interpolation=cv2.INTER_LINEAR,
+#            #interpolation=cv2.INTER_NEAREST,
+#            value=self.pad_value,
+#            same_dxdy=self.same_dxdy)
+#
+#        seg_map = elastic_transform(
+#            img=seg_map,
+#            alpha=self.alpha,
+#            sigma=self.sigma,
+#            alpha_affine=self.alpha_affine,
+#            pts1=pts1,
+#            pts2=pts2,
+#            interpolation=cv2.INTER_NEAREST,
+#            value=self.seg_pad_value,
+#            same_dxdy=self.same_dxdy
+#        )
+#
+#        if weight_map is not None:
+#            weight_map = elastic_transform(
+#            img=weight_map,
+#            alpha=self.alpha,
+#            sigma=self.sigma,
+#            alpha_affine=self.alpha_affine,
+#            pts1=pts1,
+#            pts2=pts2,
+#            interpolation=cv2.INTER_LINEAR,
+#            #interpolation=cv2.INTER_NEAREST,
+#            value=self.pad_value,
+#            same_dxdy=self.same_dxdy)
+#
+#        if weight_map is not None:
+#            return img, seg_map, weight_map
+#        else:
+#            return img, seg_map
 
 class RandomChoice():
     """Apply single transformation randomly picked from a list. This transform does not support torchscript."""
 
-    def __init__(self, transforms, p=None):
+    def __init__(self, transforms):
         self.transforms = transforms
-        self.p = p
 
     def __call__(self, *args):
         t = random.choice(self.transforms)
         return t(*args)
 
+    def __repr__(self) -> str:
+        format_string = self.__class__.__name__ + "("
+        for t in self.transforms:
+            format_string += "\n"
+            format_string += f"    {t}"
+        format_string += "\n)"
+        return format_string
     #def __repr__(self) -> str:
         #return f"{super().__repr__()}(p={self.p})"
 
@@ -2165,8 +2619,9 @@ class RandomChoice():
 #img = img[:244, :300]
 #cv2.imwrite('resG5.png', img)
 #print(img.shape, img.shape[0] / img.shape[1])
-#img = trans(img)
+#print(img.shape, img.shape[0] / img.shape[1])
 #cv2.imwrite('resP4.png', img)
+#img = trans(img)
 #print(img.shape, img.shape[0] / img.shape[1])
 #
 #img_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)/testA_16.bmp'
@@ -2189,7 +2644,8 @@ class RandomChoice():
 #    std = (1, 1, 1)
 #    #std=settings.STD
 #)
-
+# trans = Resize(min_size=230)
+#
 #trans = Resize(min_size=230)
 #print(img.shape)
 #imgs = trans(img, seg_map)
@@ -2204,20 +2660,20 @@ class RandomChoice():
         #print(im.shape)
         #print
 #img, seg_map = trans(img, seg_map)
-#print(img.shape, seg_map.shape)
-#seg_map[seg_map != 0] = 255
 #cv2.imwrite('test1.jpg', img)
 #cv2.imwrite('test2.jpg', seg_map)
-#
-## print(img)
+#print(img.shape, seg_map.shape)
+#seg_map[seg_map != 0] = 255
 #
 #cv2.imwrite('res1.jpg', seg_map)
 ##cv2.imwrite('res1.jpg', img)
-#elastic_transforms = ElasticTransform(alpha=10, sigma=3, alpha_affine=90, p=1)
-#img1, seg_map = elastic_transforms(img, seg_map)
+## print(img)
+#
 ##cv2.imwrite('res.jpg', img1)
 #cv2.imwrite('res.jpg', seg_map[0])
 #cv2.imwrite('seg_map.jpg', seg_map[1])
+#elastic_transforms = ElasticTransform(alpha=10, sigma=3, alpha_affine=90, p=1)
+#img1, seg_map = elastic_transforms(img, seg_map)
 #
 
 # print(np.unique(seg_map))
@@ -2264,10 +2720,10 @@ class RandomChoice():
 ##img, mask = trans4(img, mask)
 ### print(finish - start)
 ### print(img.shape, mask.shape)
-##
-##print(img.shape, mask.shape)
 ##cv2.imwrite('src.jpg', img)
 ##cv2.imwrite('src1.jpg', mask)
+##
+##print(img.shape, mask.shape)
 
 #crop_size=(208, 208)
 #trans = Compose([
@@ -2291,8 +2747,8 @@ class RandomChoice():
 #dataset = Glas('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data', image_set='train', transforms=trans)
 #
 #import random
-#img, segmap, weight_map = random.choice(dataset)
-#
 #cv2.imwrite('test.jpg', img)
 #cv2.imwrite('test1.jpg', segmap * 50)
 #cv2.imwrite('test2.jpg', weight_map)
+#img, segmap, weight_map = random.choice(dataset)
+#
