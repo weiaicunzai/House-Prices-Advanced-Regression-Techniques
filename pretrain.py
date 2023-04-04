@@ -20,7 +20,6 @@ import cv2
 import transforms
 import utils
 from conf import settings
-from dataset.voc2012 import VOC2012Aug
 #from dataset.camvid_lmdb import CamVid
 from lr_scheduler import PolynomialLR, WarmUpLR, WarmUpWrapper
 from metric import eval_metrics, gland_accuracy_object_level, accuracy_pixel_level
@@ -49,14 +48,14 @@ def train(net, train_dataloader, val_loader, writer, args):
 
     ckpt_manager = utils.CheckPointManager(ckpt_path, max_keep_ckpts=5)
 
-    optimizer = optim.SGD(net.parameters(), lr=args.lr * args.scale, momentum=0.9, weight_decay=5e-4)
+    optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
     # iter_per_epoch = len(train_dataset) / args.b
 
     # max_iter = args.e * len(train_loader)
     total_iter = args.iter
     warmup_iter = int(args.iter * 0.1)
 
-    train_scheduler = PolynomialLR(optimizer, total_iters=total_iter - warmup_iter, power=0.9, min_lr=args.min_lr * args.scale)
+    train_scheduler = PolynomialLR(optimizer, total_iters=total_iter - warmup_iter, power=0.9, min_lr=args.min_lr)
     warmup_scheduler = WarmUpLR(optimizer, total_iters=warmup_iter)
     lr_schduler = WarmUpWrapper(warmuplr_scheduler=warmup_scheduler, lr_scheduler=train_scheduler)
 
@@ -711,6 +710,16 @@ if __name__ == '__main__':
     val_loader = utils.data_loader(args, 'val')
 
     net = utils.get_model(args.net, 3, train_dataset.class_num, args=args)
+
+    #ckpt_path = 'crctp/latest.pth'
+    # crctp
+    # ckpt_path = '/data/hdd1/by/mmclassification/work_dirs/gland/latest.pth'
+
+
+    # print('Loading pretrained checkpoint from {}'.format(ckpt_path))
+    # new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path)['state_dict'])
+    # net.load_state_dict(new_state_dict)
+    # print('Done!')
 
     if args.resume:
         weight_path = utils.get_weight_path(
