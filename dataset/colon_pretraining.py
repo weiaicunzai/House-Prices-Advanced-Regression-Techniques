@@ -213,6 +213,10 @@ class PreTraining(Dataset):
         #for img, seg_map in zip(imgs, seg_maps):
         #    print(img)
         #    print(seg_map)
+        #img, seg_map = self.get_crops()
+        #imgs.extend(img)
+        #seg_maps.extend(seg_map)
+        #print(len(imgs))
         img, seg_map = self.get_ebhi()
         imgs.extend(img)
         seg_maps.extend(seg_map)
@@ -436,6 +440,24 @@ class PreTraining(Dataset):
 
         return imgs, seg_maps
 
+    def get_kumar(self):
+        path = '/data/smb/syh/colon_dataset/Kumar/kumar'
+
+        imgs = []
+        seg_maps = []
+        for img in glob.iglob(os.path.join(path, '**', '*.tif'), recursive=True):
+            if 'Overlay' in img:
+                continue
+
+            label_path = img.replace('Images', 'Labels').replace('.tif', '.mat')
+
+            imgs.append(img)
+            seg_maps.append(label_path)
+
+
+
+        return imgs, seg_maps
+
 
     def get_cpm17(self):
         path = '/data/smb/syh/colon_dataset/CPM17/cpm17/'
@@ -474,6 +496,58 @@ class PreTraining(Dataset):
 
 
         #return img, label_path
+        return imgs, seg_maps
+
+    def get_crops(self):
+        imgs = []
+        seg_maps = []
+
+        glas_train = '/data/smb/syh/gland_segmentation/Glas/Cropped/train/'
+        for img in glob.iglob(os.path.join(glas_train, '**', '*.jpg'), recursive=True):
+
+           if 'Images' not in img:
+               continue
+
+           label_path = img.replace('Images', 'Annotation').replace('.jpg', '.png')
+
+           imgs.append(img)
+           seg_maps.append(label_path)
+
+
+        #glas_valid = '/data/smb/syh/gland_segmentation/Glas/Cropped/valid/'
+        #for img in glob.iglob(os.path.join(glas_valid, '**', '*.jpg'), recursive=True):
+
+        #    if 'Images' not in img:
+        #        continue
+
+        #    label_path = img.replace('Images', 'Annotation').replace('.jpg', '.png')
+
+        #    imgs.append(img)
+        #    seg_maps.append(label_path)
+
+        crag_train = '/data/smb/syh/gland_segmentation/CRAGV2/Cropped/train/'
+        for img in glob.iglob(os.path.join(crag_train, '**', '*.jpg'), recursive=True):
+
+            if 'Images' not in img:
+                continue
+
+            label_path = img.replace('Images', 'Annotation').replace('.jpg', '.png')
+
+            imgs.append(img)
+            seg_maps.append(label_path)
+
+        crag_valid = '/data/smb/syh/gland_segmentation/CRAGV2/Cropped/valid/'
+        for img in glob.iglob(os.path.join(crag_valid, '**', '*.jpg'), recursive=True):
+
+            if 'Images' not in img:
+                continue
+
+            label_path = img.replace('Images', 'Annotation').replace('.jpg', '.png')
+
+            imgs.append(img)
+            seg_maps.append(label_path)
+
+
         return imgs, seg_maps
 
 
