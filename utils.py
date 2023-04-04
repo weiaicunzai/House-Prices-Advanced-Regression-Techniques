@@ -15,7 +15,7 @@ import skimage.morphology as morph
 
 
 import transforms
-from dataset import VOC2012Aug, Glas, PreTraining, CRAG
+from dataset import Glas, PreTraining, CRAG
 from conf import settings
 from metric import eval_metrics, gland_accuracy_object_level
 
@@ -400,12 +400,12 @@ def pretrain_training_transforms():
 
     #crop_size=(256, 256)
     #crop_size=(480, 480)
-    crop_size=(224, 224)
+    crop_size=(256, 256)
     trans = transforms.Compose([
             transforms.ElasticTransform(alpha=10, sigma=3, alpha_affine=20, p=0.5),
             # transforms.RandomRotation(degrees=90, expand=False),
             transforms.RandomRotation(degrees=90, expand=True),
-            transforms.Resize(range=[0.5, 1.5]),
+            transforms.Resize(range=[0.5, 1.5], size=crop_size),
             #transforms.Resize(min_size=208 + 30),
             #transforms.Resize(min_size=256),
             transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=1, pad_if_needed=True),
@@ -451,10 +451,11 @@ def pretrain_test_transforms():
             #min_size=256,
             #min_size=480,
             #min_size=480,
-            min_size=224,
+            min_size=480,
+            #min_size=224,
             #min_size=None,
             mean=settings.MEAN,
-            std=settings.STD
+            std=settings.STD,
         )
     #import transforms_pretrain
     #trans = transforms_pretrain.Compose([
@@ -495,6 +496,11 @@ def data_loader(args, image_set):
             trans = pretrain_test_transforms()
 
         dataset.transforms = trans
+
+        print('transforms:')
+        print(trans)
+        print()
+
         if image_set != 'train':
             batch_size = 4
             shuffle = False
@@ -542,68 +548,86 @@ def data_loader(args, image_set):
             crop_size=(480, 480)
 
     if args.dataset == 'crag':
-            #crop_size=(768, 768)
-            crop_size=(1024, 1024)
+            crop_size=(768, 768)
+            #crop_size=(1024, 1024)
     if image_set == 'train':
-        #img_scale = (522, 775)
-        #img_norm_cfg = dict(
-        ## mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
-        #    mean=[200.2103937666394, 130.35073328696086, 200.7955948978498],
-        #    std=[33.296002816472495, 62.533182555417845, 42.21131635702842],
-        #    to_rgb=True
-        #)
-
-
-#        trans = mmtransform.Compose(
-#            [
-#                mmtransform.Resize(img_scale=img_scale, ratio_range=(0.5, 2.0)),
-#                mmtransform.RandomRotate(prob=1, degree=(0, 90), auto_bound=True),
-#                mmtransform.RandomCrop(crop_size),
-#                mmtransform.RandomFlip(prob=0.5, direction='horizontal'),
-#                mmtransform.RandomFlip(prob=0.5, direction='vertical'),
-#                mmtransform.PhotoMetricDistortion(),
-#                mmtransform.Normalize(**img_norm_cfg),
-#                mmtransform.Pad(size=crop_size, pad_val=0, seg_pad_val=255),
-#                mmtransform.DefaultFormatBundle(),
-##my_trans.append(RandomCrop(crop_size=crop_size, cat_max_ratio=0.75))
-##my_trans.append(RandomFlip(prob=0.5))
-##my_trans.append(PhotoMetricDistortion())
-#            ]
-#        )
-        #trans = transforms.Compose([
-        #    transforms.EncodingLable(),
-        #    transforms.RandomHorizontalFlip(),
-        #    transforms.RandomVerticalFlip(),
-        #    transforms.RandomRotation(15, fill=0),
-        #    transforms.RandomScaleCrop(settings.IMAGE_SIZE),
-        #    transforms.RandomGaussianBlur(),
-        #    transforms.ColorJitter(0.4, 0.4),
-        #    transforms.ToTensor(),
-        #    transforms.Normalize(settings.MEAN, settings.STD),
-        #])
-
-        #crop_size=(480, 480)
-        #crop_size=(1024, 1024)
-        # if args.dataset == 'Glas':
-            # crop_size=(480, 480)
-
-        # if args.dataset == 'crag':
-            # crop_size=(768, 768)
-        #crop_size=(208, 208)
         trans = transforms.Compose([
-            transforms.ElasticTransform(alpha=10, sigma=3, alpha_affine=30, p=0.5),
-            transforms.RandomRotation(degrees=90, expand=True),
+
+            transforms.RandomChoice
+                (
+                    [
+                        # nothing:
+                        transforms.Compose([]),
+
+                        # h:
+                        transforms.RandomHorizontalFlip(p=1),
+
+                        # v:
+                        transforms.RandomVerticalFlip(p=1),
+
+                        # hv:
+                        transforms.Compose([
+                               transforms.RandomVerticalFlip(p=1),
+                               transforms.RandomHorizontalFlip(p=1),
+                        ]),
+
+                         #r90:
+                        # transforms.RandomRotation(degrees=(90, 90), expand=True, p=1),
+                        # transforms.MyRotate90(degrees=(90, 90), expand=True, p=1),
+                        transforms.MyRotate90(p=1),
+
+                        # #r90h:
+                        transforms.Compose([
+                            # transforms.RandomRotation(degrees=(90, 90), expand=True, p=1),
+                            transforms.MyRotate90(p=1),
+                            transforms.RandomHorizontalFlip(p=1),
+                        ]),
+
+                        # #r90v:
+                        transforms.Compose([
+                            # transforms.RandomRotation(degrees=(90, 90), expand=True, p=1),
+                            transforms.MyRotate90(p=1),
+                            transforms.RandomVerticalFlip(p=1),
+                        ]),
+
+                        # #r90hv:
+                        transforms.Compose([
+                            # transforms.RandomRotation(degrees=(90, 90), expand=True, p=1),
+                            transforms.MyRotate90(p=1),
+                            transforms.RandomHorizontalFlip(p=1),
+                            transforms.RandomVerticalFlip(p=1),
+                        ]),
+                    ]
+                ),
+
+            # transforms.ElasticTransformWrapper(),
+            transforms.MyElasticTransform(),
             transforms.Resize(range=[0.5, 1.5]),
-            #transforms.Resize(min_size=208 + 30),
-            transforms.RandomVerticalFlip(),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomApply(
-                transforms=[transforms.PhotoMetricDistortion()]
-            ),
-            transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.99, pad_if_needed=True),
+        #    # transforms.ElasticTransform(alpha=10, sigma=3, alpha_affine=30, p=0.5),
+            transforms.RandomRotation(degrees=(0, 90), expand=True),
+            # transforms.RandomApply([
+            transforms.PhotoMetricDistortion(),
+        #    # ]),
+            transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True),
             transforms.ToTensor(),
             transforms.Normalize(settings.MEAN, settings.STD)
         ])
+
+
+        # trans = transforms.Compose([
+        #     transforms.ElasticTransform(alpha=10, sigma=3, alpha_affine=30, p=0.5),
+        #     transforms.RandomRotation(degrees=90, expand=True),
+        #     transforms.Resize(range=[0.5, 1.5]),
+        #     #transforms.Resize(min_size=208 + 30),
+        #     transforms.RandomVerticalFlip(),
+        #     transforms.RandomHorizontalFlip(),
+        #     transforms.RandomApply(
+        #         transforms=[transforms.PhotoMetricDistortion()]
+        #     ),
+        #     transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.99, pad_if_needed=True),
+        #     transforms.ToTensor(),
+        #     transforms.Normalize(settings.MEAN, settings.STD)
+        # ])
 
     elif image_set == 'val':
         #trans = transforms.Compose([
@@ -615,13 +639,21 @@ def data_loader(args, image_set):
         #])
 
         trans = transforms.MultiScaleFlipAug(
-            #img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
-            img_ratios=[1],
-            flip=True,
+            img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
+            # rescale=True,
+            #img_ratios=[1],
+            # flip=True,
             #flip=False,
             #flip_direction=['horizontal', 'vertical', ],
-            flip_direction=['h', 'v'],
+            #flip_direction=['h', 'v'],
             #flip_direction=['h', 'v', 'hv', 'r90'],
+            #flip_direction=['h', 'v', 'r90'], + 1
+            #flip_direction=['h', 'v', 'vh'],
+            #flip_direction=['h', 'v', 'vh', 'hv'],
+            #flip_direction=['h', 'v', 'hv'],
+            #flip_direction=['h', 'v', 'r90h'],
+            #flip_direction=['h', 'v', 'r90v'],
+            flip_direction=['h', 'v', 'hv', 'r90', 'r90h', 'r90v', 'r90hv', 'none'],
             #flip_direction=['h', 'v'],
             #flip_direction=['horizontal'],
             # transforms=[
@@ -633,6 +665,9 @@ def data_loader(args, image_set):
             #min_size=None,
             #min_size=480,
             #min_size=1024,
+            # min_size=crop_size[0],
+            #min_size=None, # F1 0.8776095444114832, Dice:0.8882521941014574,
+            #min_size=args.size,
             min_size=crop_size[0],
             mean=settings.MEAN,
             std=settings.STD
@@ -659,7 +694,8 @@ def data_loader(args, image_set):
             #flip=False,
             #flip_direction=['horizontal', 'vertical', ],
             #flip_direction=['h', 'v'],
-            flip_direction=['h', 'v', 'hv', 'r90'],
+            #flip_direction=['h', 'v', 'hv', 'r90'],
+            flip_direction=['h', 'v'],
             #flip_direction=['h', 'v'],
             #flip_direction=['horizontal'],
             # transforms=[
