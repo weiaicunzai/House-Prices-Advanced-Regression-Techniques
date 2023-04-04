@@ -38,20 +38,23 @@ if __name__ == '__main__':
     #print(m.group())
     checkpoint = os.path.basename(os.path.dirname(args.weight))
 
+    # for  i in range(100, 800, 10):
+        # args.size = i
     if args.dataset == 'Glas':
-        #test_dataloader = utils.data_loader(args, 'testA')
-        test_dataloader = utils.data_loader(args, 'val')
-        test_dataset = test_dataloader.dataset
-        net = utils.get_model(args.net, 3, test_dataset.class_num, args=args)
-        net.load_state_dict(torch.load(args.weight))
-        net = net.cuda()
-        print(args.weight)
-        net.eval()
-        #print('Glas testA')
-        with torch.no_grad():
-            results = evaluate(net, test_dataloader, args)
-            for key, values in results.items():
-                print('{}: F1 {}, Dice:{}, Haus:{}'.format(key, *values))
+            #test_dataloader = utils.data_loader(args, 'testA')
+            test_dataloader = utils.data_loader(args, 'val')
+            test_dataset = test_dataloader.dataset
+            print(test_dataset.transforms)
+            net = utils.get_model(args.net, 3, test_dataset.class_num, args=args)
+            net.load_state_dict(torch.load(args.weight))
+            net = net.cuda()
+            print(args.weight)
+            net.eval()
+            #print('Glas testA')
+            with torch.no_grad():
+                    results = evaluate(net, test_dataloader, args)
+                    for key, values in results.items():
+                        print('{}: F1 {}, Dice:{}, Haus:{}'.format(key, *values))
 
             #utils.test(
             #    net,
