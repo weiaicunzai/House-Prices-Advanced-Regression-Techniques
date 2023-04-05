@@ -608,6 +608,8 @@ def data_loader(args, image_set):
             # transforms.RandomApply([
             transforms.PhotoMetricDistortion(),
         #    # ]),
+            transforms.MyGaussianBlur(),
+            transforms.MyToGray(),
             transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True),
             transforms.ToTensor(),
             transforms.Normalize(settings.MEAN, settings.STD)
@@ -639,21 +641,20 @@ def data_loader(args, image_set):
         #])
 
         trans = transforms.MultiScaleFlipAug(
-            img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
+            # img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
             # rescale=True,
-            #img_ratios=[1],
+            img_ratios=[1],
             # flip=True,
             #flip=False,
             #flip_direction=['horizontal', 'vertical', ],
             #flip_direction=['h', 'v'],
             #flip_direction=['h', 'v', 'hv', 'r90'],
             #flip_direction=['h', 'v', 'r90'], + 1
-            #flip_direction=['h', 'v', 'vh'],
             #flip_direction=['h', 'v', 'vh', 'hv'],
-            #flip_direction=['h', 'v', 'hv'],
+            flip_direction=['h', 'v', 'hv'],
             #flip_direction=['h', 'v', 'r90h'],
             #flip_direction=['h', 'v', 'r90v'],
-            flip_direction=['h', 'v', 'hv', 'r90', 'r90h', 'r90v', 'r90hv', 'none'],
+            # flip_direction=['h', 'v', 'hv', 'r90', 'r90h', 'r90v', 'r90hv', 'none'],
             #flip_direction=['h', 'v'],
             #flip_direction=['horizontal'],
             # transforms=[
