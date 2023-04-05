@@ -317,7 +317,8 @@ class RandomCrop(object):
                 pad_value=0,
                 seg_pad_value=255,
                 cat_max_ratio=1.,
-                padding_mode='reflect'
+                padding_mode='reflect',
+                keep_ratio=True,
                 ):
         if isinstance(crop_size, numbers.Number):
             self.crop_size = (int(crop_size), int(crop_size))
@@ -331,6 +332,7 @@ class RandomCrop(object):
         self.seg_pad_value = seg_pad_value
         #self.ignore_value = ignore_value,
         self.cat_max_ratio = cat_max_ratio
+        self.keep_ratio = keep_ratio
 
     @staticmethod
     def get_params(img, output_size):
@@ -438,36 +440,36 @@ class RandomCrop(object):
 
 
         bbox = crop(mask, i, j, h, w)
-        # if self.cat_max_ratio < 1.:
-            # Repeat 10 times
-        tmp_cmr = self.cat_max_ratio
-        for iidx in range(1, 1000):
-            #while True:
-                # print(i, j, h, w)
-                bbox = crop(mask, i, j, h, w)
-                # cc = bbox.copy()
-                # cc[cc == 1] = 200
-                # cv2.imwrite('tmp2/bbox{}.png'.format(iidx), cc)
-                labels, cnt = np.unique(bbox, return_counts=True)
-                cnt = cnt[labels != self.seg_pad_value]
-                #print(iidx, cnt, np.max(cnt) / np.sum(cnt), i, j)
-                # print(cnt, np.max(cnt) / np.sum(cnt), i, j)
-                # print(min(tmp_cmr, 1), iidx)
-                if len(cnt) > 1 and 0.1 < np.max(cnt) / np.sum(
-                        cnt) < min(tmp_cmr, 1):
-                    break
-                i, j, h, w = self.get_params(img, self.crop_size)
 
-                if iidx % 20 == 0:
-                    tmp_cmr += 0.1
+        if self.keep_ratio:
+            tmp_cmr = self.cat_max_ratio
+            for iidx in range(1, 1000):
+                #while True:
+                    # print(i, j, h, w)
+                    bbox = crop(mask, i, j, h, w)
+                    # cc = bbox.copy()
+                    # cc[cc == 1] = 200
+                    # cv2.imwrite('tmp2/bbox{}.png'.format(iidx), cc)
+                    labels, cnt = np.unique(bbox, return_counts=True)
+                    cnt = cnt[labels != self.seg_pad_value]
+                    #print(iidx, cnt, np.max(cnt) / np.sum(cnt), i, j)
+                    # print(cnt, np.max(cnt) / np.sum(cnt), i, j)
+                    # print(min(tmp_cmr, 1), iidx)
+                    if len(cnt) > 1 and 0.1 < np.max(cnt) / np.sum(
+                            cnt) < min(tmp_cmr, 1):
+                        break
+                    i, j, h, w = self.get_params(img, self.crop_size)
+
+                    if iidx % 20 == 0:
+                        tmp_cmr += 0.1
 
 
 
-                if len(cnt) == 1 and iidx == 999:
-                    cv2.imwrite('img.jpg', img)
-                    cv2.imwrite('mask.png', mask * 255)
-                    print(np.max(cnt) / np.sum(cnt))
-                    raise ValueError('still no pixels of class???')
+                    if len(cnt) == 1 and iidx == 999:
+                        cv2.imwrite('img.jpg', img)
+                        cv2.imwrite('mask.png', mask * 255)
+                        print(np.max(cnt) / np.sum(cnt))
+                        raise ValueError('still no pixels of class???')
 
         img = crop(img, i, j, h, w)
 
@@ -940,6 +942,7 @@ class MyElasticTransform(ElasticTransform):
         approximate=False,
         same_dxdy=False,
         p=0.5,
+        keep_class=True
     ):
         super(ElasticTransform, self).__init__(always_apply, p)
         self.alpha = alpha
@@ -953,6 +956,7 @@ class MyElasticTransform(ElasticTransform):
         self.same_dxdy = same_dxdy
         self.sigma_range = sigma_range
         self.alpha_range = alpha_range
+        self.keep_class = keep_class
 
     @property
     def targets(self):
@@ -991,6 +995,7 @@ class MyElasticTransform(ElasticTransform):
             "mask_value",
             "approximate",
             "same_dxdy",
+            "keep_class",
         )
 
 
@@ -1048,9 +1053,10 @@ class MyElasticTransform(ElasticTransform):
             mask = output.get('mask')
             weight_map = output.get('weightmap')
 
-            if mask[mask != 255].sum() == 0:
-                print('here')
-                return ori_img, ori_mask, ori_weight_map
+            if self.keep_class:
+                if mask[mask != 255].sum() == 0:
+                    print('here')
+                    return ori_img, ori_mask, ori_weight_map
 
             return img, mask, weight_map
 
@@ -1059,9 +1065,10 @@ class MyElasticTransform(ElasticTransform):
             img = output.get('image')
             mask = output.get('mask')
 
-            if mask[mask != 255].sum() == 0:
-                print('here')
-                return ori_img, ori_mask
+            if self.keep_class:
+                if mask[mask != 255].sum() == 0:
+                    print('here')
+                    return ori_img, ori_mask
 
             # weight_map = output.get('weightmap')
             return img, mask
