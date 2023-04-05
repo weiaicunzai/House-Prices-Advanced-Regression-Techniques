@@ -19,6 +19,8 @@ import torchvision.transforms.functional as F
 from PIL import Image, ImageEnhance
 from albumentations.augmentations.geometric.transforms import ElasticTransform
 from albumentations.augmentations.geometric.rotate import RandomRotate90
+from albumentations.augmentations.transforms import ToGray
+from albumentations.augmentations.blur.transforms import GaussianBlur
 
 _cv2_pad_to_str = {
     'constant': cv2.BORDER_CONSTANT,
@@ -781,7 +783,112 @@ class RandomApply(torch.nn.Module):
 
 
 
-# class MyElasticTransform(ElasticTransform):
+class MyGaussianBlur(GaussianBlur):
+
+    def trans(self, *args, force_apply: bool = False, **kwargs):
+        if args:
+            raise KeyError("You have to pass data to augmentations as named arguments, for example: aug(image=image)")
+        if self.replay_mode:
+            if self.applied_in_replay:
+                return self.apply_with_params(self.params, **kwargs)
+
+            return kwargs
+
+        if (random.random() < self.p) or self.always_apply or force_apply:
+            params = self.get_params()
+
+            if self.targets_as_params:
+                assert all(key in kwargs for key in self.targets_as_params), "{} requires {}".format(
+                    self.__class__.__name__, self.targets_as_params
+                )
+                targets_as_params = {k: kwargs[k] for k in self.targets_as_params}
+                params_dependent_on_targets = self.get_params_dependent_on_targets(targets_as_params)
+                params.update(params_dependent_on_targets)
+            if self.deterministic:
+                if self.targets_as_params:
+                    warn(
+                        self.get_class_fullname() + " could work incorrectly in ReplayMode for other input data"
+                        " because its' params depend on targets."
+                    )
+                kwargs[self.save_key][id(self)] = deepcopy(params)
+            return self.apply_with_params(params, **kwargs)
+
+        return kwargs
+
+    def __call__(self, img, mask, weight_map=None):
+        """
+            img (np.ndarray): Image to be rotated.
+        Returns:
+            np.ndarray: Rotated image.
+        """
+
+        if weight_map is not None:
+            # before = (mask == 1).sum()
+            output = self.trans(image=img)
+            img = output.get('image')
+
+            return img, mask, weight_map
+
+        else:
+            output = self.trans(image=img)
+            img = output.get('image')
+
+            return img, mask
+
+
+class MyToGray(ToGray):
+
+
+    def trans(self, *args, force_apply: bool = False, **kwargs):
+        if args:
+            raise KeyError("You have to pass data to augmentations as named arguments, for example: aug(image=image)")
+        if self.replay_mode:
+            if self.applied_in_replay:
+                return self.apply_with_params(self.params, **kwargs)
+
+            return kwargs
+
+        if (random.random() < self.p) or self.always_apply or force_apply:
+            params = self.get_params()
+
+            if self.targets_as_params:
+                assert all(key in kwargs for key in self.targets_as_params), "{} requires {}".format(
+                    self.__class__.__name__, self.targets_as_params
+                )
+                targets_as_params = {k: kwargs[k] for k in self.targets_as_params}
+                params_dependent_on_targets = self.get_params_dependent_on_targets(targets_as_params)
+                params.update(params_dependent_on_targets)
+            if self.deterministic:
+                if self.targets_as_params:
+                    warn(
+                        self.get_class_fullname() + " could work incorrectly in ReplayMode for other input data"
+                        " because its' params depend on targets."
+                    )
+                kwargs[self.save_key][id(self)] = deepcopy(params)
+            return self.apply_with_params(params, **kwargs)
+
+        return kwargs
+
+    def __call__(self, img, mask, weight_map=None):
+        """
+            img (np.ndarray): Image to be rotated.
+        Returns:
+            np.ndarray: Rotated image.
+        """
+
+        if weight_map is not None:
+            # before = (mask == 1).sum()
+            output = self.trans(image=img)
+            img = output.get('image')
+
+            return img, mask, weight_map
+
+        else:
+            output = self.trans(image=img)
+            img = output.get('image')
+
+            return img, mask
+
 
 class MyElasticTransform(ElasticTransform):
     """Elastic deformation of images as described in [Simard2003]_ (with modifications).
@@ -939,12 +1046,9 @@ class MyElasticTransform(ElasticTransform):
             output = self.trans(image=img, mask=mask, weightmap=weight_map)
             img = output.get('image')
             mask = output.get('mask')
-            #after = (mask == 1).sum()
-            # if before == 0 or after == 0:
-                # print(before, after)
             weight_map = output.get('weightmap')
 
-            if mask[mask != self.mask_value].sum() == 0:
+            if mask[mask != 255].sum() == 0:
                 print('here')
                 return ori_img, ori_mask, ori_weight_map
 
@@ -955,7 +1059,7 @@ class MyElasticTransform(ElasticTransform):
             img = output.get('image')
             mask = output.get('mask')
 
-            if mask[mask != self.mask_value].sum() == 0:
+            if mask[mask != 255].sum() == 0:
                 print('here')
                 return ori_img, ori_mask
 
@@ -2612,6 +2716,8 @@ class RandomChoice():
         return format_string
     #def __repr__(self) -> str:
         #return f"{super().__repr__()}(p={self.p})"
+
+
 
 #img_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/img.jpg'
 #img = cv2.imread(img_path)
