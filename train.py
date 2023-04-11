@@ -575,8 +575,8 @@ def evaluate(net, val_dataloader, args):
                     crop_size=None,
                     stride=None,
                     #mode='slide',
-                    rescale=True,
-                    #rescale=False,
+                    # rescale=True,
+                    rescale=False,
                     mode='whole',
                     num_classes=valid_dataset.class_num
                 )
@@ -791,8 +791,7 @@ def evaluate(net, val_dataloader, args):
     #    epoch,
     #)
 
-    if best_iou < miou and epoch > args.e // 4:
-    #if best_iou < miou:
+    if best_iou < miou:
         best_iou = miou
         if prev_best:
             os.remove(prev_best)
@@ -953,7 +952,22 @@ if __name__ == '__main__':
 
 
     #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Saturday_25_March_2023_23h_51m_46s/iter_39999.pt'
-    ckpt_path = '/data/smb/syh/checkpoints/only_pretrained_on_ehis/iter_39999.pt'
+    #ckpt_path = '/data/smb/syh/checkpoints/only_pretrained_on_ehis/iter_39999.pt'
+
+    # tgt pretrained on crops
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Wednesday_05_April_2023_23h_43m_23s/iter_79999.pt'
+
+    #tg pretrained on crops
+    # ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Wednesday_05_April_2023_23h_43m_23s/iter_79999.pt'
+
+    # tgt percent 30
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Saturday_08_April_2023_23h_39m_46s/iter_39999.pt'
+
+    # tgt percent 60
+    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Saturday_08_April_2023_23h_46m_27s/iter_39999.pt'
+
+    # tgt percent 100
+    ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Sunday_09_April_2023_23h_37m_23s/iter_39999.pt'
 
     # zuihao pretrain
     #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Monday_27_March_2023_21h_23m_46s/iter_39999.pt'
