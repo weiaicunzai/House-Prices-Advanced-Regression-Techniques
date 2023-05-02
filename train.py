@@ -25,12 +25,12 @@ from lr_scheduler import PolynomialLR, WarmUpLR, WarmUpWrapper
 from metric import eval_metrics, gland_accuracy_object_level
 from dataloader import IterLoader
 import test_aug
-from losses import DiceLoss, WeightedLossWarpper, GlandContrastLoss
+from losses import DiceLoss, WeightedLossWarpper, GlandContrastLoss, TI_Loss
 import sampler as _sampler
 
 
 
-def train(net, train_dataloader, val_loader, writer, args):
+def train(net, train_dataloader, val_loader, writer, args, val_set):
 
     root_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -81,6 +81,12 @@ def train(net, train_dataloader, val_loader, writer, args):
     #loss_fn_ce = WeightedLossWarpper(loss_fn_ce, sampler)
     #loss_fn_dice = WeightedLossWarpper(loss_fn_dice, sampler)
 
+    ti_loss_weight = 1e-4
+        #ti_loss_func = TI_Loss(dim=2, connectivity=4, inclusion=[[1,2]], exclusion=[[2,3],[3,4]])
+    ti_loss_func = TI_Loss(dim=2, connectivity=4, inclusion=[[1,2]], exclusion=[[2,3],[3,4]])
+    # ti_loss_value = ti_loss_func(x, y) if ti_loss_weight != 0 else 0
+    # ti_loss_value = ti_loss_weight * ti_loss_value
+
 
     #batch_start = time.time()
     # train_start = time.time()
@@ -122,17 +128,17 @@ def train(net, train_dataloader, val_loader, writer, args):
     #) as p:
     #images, masks = next(train_iterloader)
 
-    vis_idx = 4
+    vis_idx = 5
     train_t = time.time()
     for iter_idx, (images, masks, weight_maps) in enumerate(train_iterloader):
 
 
-        if args.vis and iter_idx == vis_idx :
+        if args.vis and iter_idx % vis_idx == 0:
 
             for idx, ii in enumerate(images.clone()):
                 ii = utils.to_img(ii.cpu()).numpy()
                 ii = cv2.resize(ii, (0, 0), fx=0.5, fy=0.5)
-                ii = cv2.imwrite('tmp/img_{}.jpg'.format(idx), ii)
+                ii = cv2.imwrite('tmp/img_{}_{}.jpg'.format(iter_idx, idx), ii)
 
 
             for idx, ii in enumerate(masks.clone()):
@@ -143,7 +149,7 @@ def train(net, train_dataloader, val_loader, writer, args):
                 #ii[i==255] = 0 ### ?????
                 ii[mm] = 0
                 ii = ii / (ii.max() + 1e-7) * 255
-                ii = cv2.imwrite('tmp/gt_{}.png'.format(idx), ii.astype('uint8'))
+                ii = cv2.imwrite('tmp/gt_{}_{}.png'.format(iter_idx, idx), ii.astype('uint8'))
                 #print(idx + iter_idx * masks.shape[0])
                 #ii = cv2.imwrite('tmp/gt_{}.png'.format(idx + iter_idx * masks.shape[0]), ii.astype('uint8'))
 
@@ -194,6 +200,8 @@ def train(net, train_dataloader, val_loader, writer, args):
                 #print(loss.shape, weight_maps.shape)
                 #print(weight_maps.mean())
                 #mask = contrasive_loss(gland_preds, masks)
+
+
                 loss = loss * weight_maps + 0.4 * loss_aux * weight_maps
 
                 if args.net == 'tg':
@@ -206,9 +214,27 @@ def train(net, train_dataloader, val_loader, writer, args):
                     sup_loss = (loss + xor_mask * loss).mean()
                     loss = sup_loss + args.alpha * contrasive_loss
 
+
                 #loss = loss.mean()
 
-                if args.vis and iter_idx == vis_idx:
+                if args.vis and iter_idx % vis_idx == 0:
+
+                    print('save images....')
+                    # for idx, ii in enumerate(images.clone()):
+                    #     # ii = ii.permute(1, 2, 0)
+                    #     # ii = ii.argmax(dim=2)
+                    #     #print(ii.shape)
+                    #     #print(ii.max())
+                    #     #print(masks[idx].max())
+                    #     # mm = masks[idx] == 255
+                    #     #cv2.imwrite('tmp/pred_c_{}.png'.format(idx), mm.cpu().numpy().astype('uint8') * 255)
+                    #     #print(mm.shape)
+                    #     # ii = ii * 255
+                    #     # ii[mm] = 0
+                    #     #ii = ii / (ii.max() + 1e-7) * 255
+                    #     #print(ii.max())
+                    #     ii = cv2.imwrite('tmp/img_{}_{}.jpg'.format(iter_idx, idx), ii.cpu().numpy())
+
                     print('save gland_preds.....')
                     for idx, ii in enumerate(gland_preds.clone()):
                         ii = ii.permute(1, 2, 0)
@@ -223,7 +249,7 @@ def train(net, train_dataloader, val_loader, writer, args):
                         ii[mm] = 0
                         #ii = ii / (ii.max() + 1e-7) * 255
                         #print(ii.max())
-                        ii = cv2.imwrite('tmp/pred_{}.png'.format(idx), ii.cpu().numpy())
+                        ii = cv2.imwrite('tmp/pred_{}_{}.png'.format(iter_idx, idx), ii.cpu().numpy())
 
                     for idx, ii in enumerate(gland_preds.clone()):
                         ii = ii.permute(1, 2, 0)
@@ -241,8 +267,8 @@ def train(net, train_dataloader, val_loader, writer, args):
                         #print(diff.max(), diff.min())
                         #print(ii)
                         ii[mm] = 0
-                        ii = cv2.imwrite('tmp/uncertain_{}.png'.format(idx), ii.detach().cpu().numpy())
-                        ii = cv2.imwrite('tmp/diff_{}.png'.format(idx), diff.detach().cpu().numpy())
+                        ii = cv2.imwrite('tmp/uncertain_{}_{}.png'.format(iter_idx, idx), ii.detach().cpu().numpy())
+                        ii = cv2.imwrite('tmp/diff_{}_{}.png'.format(iter_idx, idx), diff.detach().cpu().numpy())
 
                     for idx, ii in enumerate(xor_mask.clone()):
                         #print(ii.shape)
@@ -251,7 +277,7 @@ def train(net, train_dataloader, val_loader, writer, args):
                         #print(ii.shape)
                         ii = ii / (ii.max() + 1e-7) * 255
 
-                        cv2.imwrite('tmp/xor_{}.png'.format(idx), ii.cpu().numpy().astype('uint8'))
+                        cv2.imwrite('tmp/xor_{}_{}.png'.format(iter_idx, idx), ii.cpu().numpy().astype('uint8'))
 
                     #for idx, ii in enumerate(contrasive_loss_fn.store_values['gt'][0]):
                     for hook_name in contrasive_loss_fn.store_values.keys():
@@ -274,7 +300,7 @@ def train(net, train_dataloader, val_loader, writer, args):
                                 ii = ii  / ii.max() * 255
                             #print(ii.shape)
                             #print(ii.shape)
-                            cv2.imwrite('tmp/{}_{}.png'.format(hook_name, idx), ii.astype('uint8'))
+                            cv2.imwrite('tmp/{}_{}_{}.png'.format(hook_name, iter_idx, idx), ii.astype('uint8'))
 
                     #for idx, ii in enumerate(contrasive_loss_fn.store_values['pred'][0]):
                     ###for idx, ii in enumerate(contrasive_loss_fn.store_values['gt']):
@@ -293,7 +319,7 @@ def train(net, train_dataloader, val_loader, writer, args):
                     #    cv2.imwrite('tmp/hook_xor_{}.png'.format(idx), ii.astype('uint8'))
 
                     print('stopping...........')
-                    import sys; sys.exit()
+                    # import sys; sys.exit()
 
 
 
@@ -372,7 +398,7 @@ def train(net, train_dataloader, val_loader, writer, args):
             net.eval()
             print('evaluating.........')
             #total, testA, testB = evaluate(net, val_loader, args)
-            results = evaluate(net, val_loader, args)
+            results = evaluate(net, val_loader, args, val_set)
 
             #print('total: F1 {}, Dice:{}, Haus:{}'.format(*total))
 
@@ -411,14 +437,24 @@ def train(net, train_dataloader, val_loader, writer, args):
                 total_metrics, results['total'], iter_idx)
 
             if args.dataset == 'Glas':
-                utils.visualize_metric(writer,
-                    #['testA_F1', 'testA_Dice', 'testA_Haus'], testA, iter_idx)
-                    testA_metrics, results['testA'], iter_idx)
+                if val_set == 'val':
+                    utils.visualize_metric(writer,
+                        #['testA_F1', 'testA_Dice', 'testA_Haus'], testA, iter_idx)
+                        testA_metrics, results['testA'], iter_idx)
 
-                utils.visualize_metric(writer,
-                    #['testB_F1', 'testB_Dice', 'testB_Haus'], testB, iter_idx)
-                    testB_metrics, results['testB'], iter_idx)
+                    utils.visualize_metric(writer,
+                        #['testB_F1', 'testB_Dice', 'testB_Haus'], testB, iter_idx)
+                        testB_metrics, results['testB'], iter_idx)
 
+                if val_set == 'testA':
+                    utils.visualize_metric(writer,
+                        #['testA_F1', 'testA_Dice', 'testA_Haus'], testA, iter_idx)
+                        testA_metrics, results['testA'], iter_idx)
+
+                if val_set == 'testB':
+                    utils.visualize_metric(writer,
+                        #['testB_F1', 'testB_Dice', 'testB_Haus'], testB, iter_idx)
+                        testB_metrics, results['testB'], iter_idx)
 
             #print(('Training Epoch:{epoch} [{trained_samples}/{total_samples}] '
             #print(('Training Iter:{iter} [{trained_samples}/{total_samples}] '
@@ -489,10 +525,19 @@ def train(net, train_dataloader, val_loader, writer, args):
                 results['total'], iter_idx)
 
             if args.dataset == 'Glas':
-                ckpt_manager.save_best(net, testA_metrics,
-                    results['testA'], iter_idx)
-                ckpt_manager.save_best(net, testB_metrics,
-                    results['testB'], iter_idx)
+                if val_set == 'val':
+                    ckpt_manager.save_best(net, testA_metrics,
+                        results['testA'], iter_idx)
+                    ckpt_manager.save_best(net, testB_metrics,
+                        results['testB'], iter_idx)
+
+                if val_set == 'testA':
+                    ckpt_manager.save_best(net, testA_metrics,
+                        results['testA'], iter_idx)
+
+                if val_set == 'testB':
+                    ckpt_manager.save_best(net, testB_metrics,
+                        results['testB'], iter_idx)
 
             print('best value:', ckpt_manager.best_value)
             net.train()
@@ -503,7 +548,7 @@ def train(net, train_dataloader, val_loader, writer, args):
         if total_iter <= iter_idx:
             break
 
-def evaluate(net, val_dataloader, args):
+def evaluate(net, val_dataloader, args, val_set):
     net.eval()
         # test_loss = 0.0
 
@@ -554,6 +599,7 @@ def evaluate(net, val_dataloader, args):
     #sampler = _sampler.OHEMPixelSampler(ignore_index=val_dataloader.dataset.ignore_index, min_kept=10000)
     out ={}
 
+    # print('dataset size:', len())
     with torch.no_grad():
         for img_metas in tqdm(val_dataloader):
             for img_meta in img_metas:
@@ -570,16 +616,24 @@ def evaluate(net, val_dataloader, args):
                     flip_direction=img_meta['flip'],
                     ori_shape=ori_shape,
                     model=net,
-                    #crop_size=(480, 480),
-                    #stride=(256, 256),
+
+                    mode='whole',
                     crop_size=None,
                     stride=None,
-                    #mode='slide',
+
                     # rescale=True,
                     rescale=False,
-                    mode='whole',
+
+                    #mode='slide',
+                    #stride=(256, 256),
+                    ## crop_size=(480, 480),
+                    ## crop_size=(416, 416),
+                    #crop_size=settings.CROP_SIZE_GLAS if args.dataset=='Glas' else settings.CROP_SIZE_CRAG,
                     num_classes=valid_dataset.class_num
                 )
+                # print(img_meta['img_name'])
+
+                # print(seg_logit.max(), seg_logit.min())
 
                 #pred[pred > 1] = 0
                 pred = pred == 1
@@ -701,10 +755,21 @@ def evaluate(net, val_dataloader, args):
     if args.dataset == 'Glas':
         #total = (testA + testB) / (count_A + count_B)
 
-        testA = testA / count_A
-        testB = testB / count_B
-        out['testA'] = testA
-        out['testB'] = testB
+        if val_set == 'testA':
+            testA = testA / count_A
+            out['testA'] = testA
+            assert count == count_A
+
+        if val_set == 'testB':
+            testB = testB / count_B
+            out['testB'] = testB
+            assert count == count_B
+
+        if val_set == 'val':
+            testA = testA / count_A
+            testB = testB / count_B
+            out['testA'] = testA
+            out['testB'] = testB
 
 
     #if args.dataset == 'carg':
@@ -839,6 +904,7 @@ if __name__ == '__main__':
     parser.add_argument('-fp16', action='store_true', default=False, help='whether to use mixed precision training')
     parser.add_argument('-wait', action='store_true', default=False, help='whether to wait until there is gpu aviliable')
     parser.add_argument('-vis', action='store_true', default=False, help='vis result of mid layer')
+    parser.add_argument('-imgset', type=str, default='train', help='default training set')
     args = parser.parse_args()
     print(args)
 
@@ -863,12 +929,28 @@ if __name__ == '__main__':
 
     writer = SummaryWriter(log_dir=log_dir)
 
-    print()
+    # print()
+    # train_img_set = 'trainB'
+    # val_img_set = 'val'
+    # img_set = 'trainA'
+    assert args.imgset in ['train', 'trainA', 'trainB']
+    img_set = args.imgset
+    print(img_set)
 
-    train_loader = utils.data_loader(args, 'train')
+    if img_set == 'trainA':
+        val_set = 'testB'
+
+    if img_set == 'trainB':
+        val_set = 'testA'
+
+    if img_set == 'train':
+        val_set = 'val'
+
+
+    train_loader = utils.data_loader(args, img_set)
     train_dataset = train_loader.dataset
 
-    val_loader = utils.data_loader(args, 'val')
+    val_loader = utils.data_loader(args, val_set)
 
     net = utils.get_model(args.net, 3, train_dataset.class_num, args=args)
     #net.load_state_dict(torch.load('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Monday_16_January_2023_05h_11m_49s/iter_39999.pt'))
@@ -939,7 +1021,7 @@ if __name__ == '__main__':
     #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Wednesday_15_March_2023_23h_47m_53s/iter_39999.pt'
 
     # test_pretraining_eihs
-    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Saturday_18_March_2023_22h_57m_50s/iter_39999.pt'
+    # ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Saturday_18_March_2023_22h_57m_50s/iter_39999.pt'
 
     # test_CRCTP
     #ckpt_path = '/data/hdd1/by/mmclassification/work_dirs/gland/latest.pth'
@@ -955,22 +1037,22 @@ if __name__ == '__main__':
     #ckpt_path = '/data/smb/syh/checkpoints/only_pretrained_on_ehis/iter_39999.pt'
 
     # tgt pretrained on crops
-    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Wednesday_05_April_2023_23h_43m_23s/iter_79999.pt'
+    # ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Wednesday_05_April_2023_23h_43m_23s/iter_79999.pt'
 
     #tg pretrained on crops
     # ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Wednesday_05_April_2023_23h_43m_23s/iter_79999.pt'
 
-    # tgt percent 30
+    # tgt percent 30 pretrain
     #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Saturday_08_April_2023_23h_39m_46s/iter_39999.pt'
 
-    # tgt percent 60
+    # tgt percent 60 pretrain
     #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Saturday_08_April_2023_23h_46m_27s/iter_39999.pt'
 
-    # tgt percent 100
-    ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Sunday_09_April_2023_23h_37m_23s/iter_39999.pt'
+    # tgt percent 100 pretrain
+    # ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Sunday_09_April_2023_23h_37m_23s/iter_39999.pt'
 
     # zuihao pretrain
-    #ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Monday_27_March_2023_21h_23m_46s/iter_39999.pt'
+    # ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Monday_27_March_2023_21h_23m_46s/iter_39999.pt'
 
     # swav_crag_train_crag_test_glas_train_ehis
     # ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_swav_ehis_glas_crag/latest.pth'
@@ -984,6 +1066,13 @@ if __name__ == '__main__':
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin_rings_densecl/latest.pth'
     # glas+crag+sin+densecl
     #ckpt_path = '/data/hdd1/by/mmselfsup/work_dir_glas_crag_sin/latest.pth'
+
+
+    # milestone no crag
+    ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Tuesday_18_April_2023_22h_09m_55s/iter_45999.pt'
+
+
+    # draw uncertain map
     print('Loading pretrained checkpoint from {}'.format(ckpt_path))
     ckpt = torch.load(ckpt_path)
     if 'state_dict' in ckpt:
@@ -1002,5 +1091,4 @@ if __name__ == '__main__':
     #utils.visualize_network(writer, net, tensor)
     net.train()
 
-    train(net, train_loader, val_loader, writer, args)
-    # evaluate(net, val_loader, writer, args)
+    train(net, train_loader, val_loader, writer, args, val_set)

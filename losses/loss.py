@@ -74,11 +74,17 @@ class GlandContrastLoss(nn.Module):
 
         self.ignore_idx = ignore_idx
 
-    def segment_level_loss(self, gt, pred, op='or', out_size=(160, 160)):
-        assert out_size[0] == out_size[1]
+        self.total_time = 0
+        self.total_samples = 0
 
-        gt = cv2.resize(gt, out_size, interpolation=cv2.INTER_NEAREST)
-        pred = cv2.resize(pred, out_size, interpolation=cv2.INTER_NEAREST)
+    def segment_level_loss(self, gt, pred, op='xor', out_size=(160, 160)):
+        # assert out_size[0] == out_size[1]
+
+        # h, w = out_size
+
+
+        gt = cv2.resize(gt, out_size[::-1], interpolation=cv2.INTER_NEAREST)
+        pred = cv2.resize(pred, out_size[::-1], interpolation=cv2.INTER_NEAREST)
 
         if op == 'none':
             return np.zeros(gt.shape, dtype=np.uint8)
@@ -112,14 +118,12 @@ class GlandContrastLoss(nn.Module):
         #cv2.imwrite('pred_loss.png', pred_labeled / pred_labeled.max() * 255)
 
         #num_pred_objs = len(np.unique(pred))
-        #print(num_pred_objs)
         #res = np.zeros(pred_labeled.shape)
 
         #colors = random.choices(colors, k=pred_num)
         #gt_colors = cv2.cvtColor(np.zeros(gt_labeled.shape).astype('uint8'), cv2.COLOR_GRAY2BGR)
         #pred_colors = gt_colors.copy()
         #g_num = np.unique(gt_labeled)
-        #print('g_num', g_num)
         #p_num = np.unique(pred_labeled)
         #print('p_num', p_num)
         #for i in g_num:
@@ -177,6 +181,11 @@ class GlandContrastLoss(nn.Module):
                     #res[pred_labeled_i_xor] = 1
 
 
+        # vis
+        ###################################################
+        # cv2.imwrite('my_mutal_alg/pred_region_wrong_number.png', res * 255)
+        ###################################################
+
         #gt
         results.append(res)
 
@@ -223,9 +232,20 @@ class GlandContrastLoss(nn.Module):
 
             #finish = time.time()
             #print('max min', finish - start)
+
+        # vis
+        ###################################################
+        # cv2.imwrite('my_mutal_alg/gt_region_wrong_number.png', res * 255)
+        ###################################################
         results.append(res)
 
+
         res = cv2.bitwise_or(results[0], results[1])
+
+        # vis
+        ###################################################
+        # cv2.imwrite('my_mutal_alg/merge_all_wrong_number_region.png', res * 255)
+        ###################################################
         if op == 'or':
             return res
 
@@ -238,15 +258,28 @@ class GlandContrastLoss(nn.Module):
                 if res[gt_labeled == i].max() != 0:
                     gt_res[gt_labeled == i] = 1
 
+            # vis
+            ###################################################
+            # cv2.imwrite('my_mutal_alg/gt_1_final_candidate_region.png', gt_res * 255)
+            ###################################################
             pred_res = np.zeros(gt.shape, dtype=np.uint8)
             for i in range(0, pred_num):
                 i += 1
                 if res[pred_labeled == i].max() != 0:
                     pred_res[pred_labeled == i] = 1
 
+            # vis
+            ###################################################
+            # cv2.imwrite('my_mutal_alg/pred_1_final_candidate_region.png', pred_res * 255)
+            ###################################################
 
             #print(pred_res.shape, 'pred_res.shape')
             res = cv2.bitwise_xor(pred_res, gt_res)
+
+            # vis
+            ###################################################
+            # cv2.imwrite('my_mutal_alg/final_result.png', res * 255)
+            ###################################################
             return res
             #return pred_res
             #return gt_res, pred_res, res, cc
@@ -267,7 +300,14 @@ class GlandContrastLoss(nn.Module):
         preds = np.argmax(preds, axis=1)
         #for b_idx in range(batch_size):
         #    res.append(segment_level_loss(gt[b_idx], preds[b_idx]))
+        t1 = time.time()
         res = [self.segment_level_loss(gt=gts[b], pred=preds[b], op=op, out_size=out_size) for b in range(bs)]
+        t2 = time.time()
+        #print((t2 - t1) / bs)
+        self.total_time += (t2 - t1)
+        self.total_samples += bs
+        print(self.total_time / self.total_samples)
+        #import sys; sys.exit()
         res = np.stack(res, axis=0)
         return res
 
@@ -637,7 +677,6 @@ class GlandContrastLoss(nn.Module):
 
 
 
-        #print(mask.shape, exp_logits.shape)
 
 
         # 0 galnd 1 bg
@@ -647,10 +686,8 @@ class GlandContrastLoss(nn.Module):
 #                bg_feats.view(-1, bg_feats.shape[-1])
 #            ], dim=0)
 #
-        #print(anchor_feats.shape, queue.shape)
         #pos = torch.einsum('nc, nc->n')
 
-        #print(anchor_feats.shape, 'c')
         #pos = anchor_feats
 
     def _dequeue_and_enqueue(self, gland_feats, bg_feats, queue, queue_ptr):
@@ -717,7 +754,10 @@ class GlandContrastLoss(nn.Module):
     def cal_uncertain_mask(self, pred_logits, mask):
         pred_probs = pred_logits.softmax(dim=1)
         diff = torch.abs(pred_probs[:, 0, :, :] - pred_probs[:, 1, :, :])
-        out = torch.exp(- 5 * diff ** 2)
+        out = diff
+        #out = torch.exp(- 5 * diff ** 2)
+        #out = torch.exp(diff ** 2 / 0.7)
+        #out = torch.exp(-5 * diff ** 2 )
 
         out = out * mask
 
@@ -740,7 +780,6 @@ class GlandContrastLoss(nn.Module):
 
         #weight = object_hard_mask * ignore_mask
         object_hard_mask[ignore_mask] = 0
-
 
         return object_hard_mask
 
@@ -859,7 +898,9 @@ class GlandContrastLoss(nn.Module):
         with torch.no_grad():
             mask = self.segment_mask(gts=gt_seg.detach().cpu().numpy(), preds=pred_logits.detach().cpu().numpy(), op=self.op, out_size=gt_seg.shape[-2:])
             mask = torch.tensor(mask, dtype=gt_seg.dtype, device=gt_seg.device)
+            self.store_values['mask'] = mask
             uncertain_mask = self.cal_uncertain_mask(pred_logits, mask)
+            self.store_values['uncertain'] = uncertain_mask
             gland_points, bg_points = self.get_points_train(gt_seg, uncertain_mask)
 
         #print(feats.shape)

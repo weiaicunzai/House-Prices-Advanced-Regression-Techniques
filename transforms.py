@@ -21,6 +21,7 @@ from albumentations.augmentations.geometric.transforms import ElasticTransform
 from albumentations.augmentations.geometric.rotate import RandomRotate90
 from albumentations.augmentations.transforms import ToGray
 from albumentations.augmentations.blur.transforms import GaussianBlur
+from albumentations.augmentations.geometric.resize import SmallestMaxSize
 
 _cv2_pad_to_str = {
     'constant': cv2.BORDER_CONSTANT,
@@ -120,6 +121,7 @@ class Resize:
                 # weight_map = cv2.resize(weight_map, (0, 0), fx=ratio, fy=ratio)
                 weight_map = cv2.resize(weight_map, size)
 
+
         # if self.size:
         #     h, w = self.size
         #     size = (w, h)
@@ -145,6 +147,7 @@ class Resize:
                 if weight_map is not None:
                     weight_map = cv2.resize(weight_map, (int(new_w), int(new_h)))
         # print(np.unique(resized_mask))
+        # print(resized_img.shape, resized_mask.shape)
         assert resized_img.shape[:2] == resized_mask.shape[:2]
 
         # print(resized_img.shape[0] / img.shape[0], resized_img.shape, img.shape)
@@ -435,13 +438,13 @@ class RandomCrop(object):
         #        i, j, h, w = self.get_params(img, self.crop_size)
 
         # assert all background image
-        assert mask[mask != self.seg_pad_value].sum() != 0
 
 
 
         bbox = crop(mask, i, j, h, w)
 
         if self.keep_ratio:
+            assert mask[mask != 255].sum() != 0
             tmp_cmr = self.cat_max_ratio
             for iidx in range(1, 1000):
                 #while True:
@@ -489,6 +492,7 @@ class RandomCrop(object):
     def __repr__(self):
         return self.__class__.__name__ + '(size={0})'.format(
             self.crop_size)
+
 
 #class RandomScale:
 #    """Randomly scaling an image (from 0.5 to 2.0]), the output image and mask
@@ -782,6 +786,62 @@ class RandomApply(torch.nn.Module):
         format_string += "\n)"
         return format_string
 
+
+
+class MySmallestMaxSize(SmallestMaxSize):
+
+
+    def trans(self, *args, force_apply: bool = False, **kwargs):
+        if args:
+            raise KeyError("You have to pass data to augmentations as named arguments, for example: aug(image=image)")
+        if self.replay_mode:
+            if self.applied_in_replay:
+                return self.apply_with_params(self.params, **kwargs)
+
+            return kwargs
+
+        if (random.random() < self.p) or self.always_apply or force_apply:
+            params = self.get_params()
+
+            if self.targets_as_params:
+                assert all(key in kwargs for key in self.targets_as_params), "{} requires {}".format(
+                    self.__class__.__name__, self.targets_as_params
+                )
+                targets_as_params = {k: kwargs[k] for k in self.targets_as_params}
+                params_dependent_on_targets = self.get_params_dependent_on_targets(targets_as_params)
+                params.update(params_dependent_on_targets)
+            if self.deterministic:
+                if self.targets_as_params:
+                    warn(
+                        self.get_class_fullname() + " could work incorrectly in ReplayMode for other input data"
+                        " because its' params depend on targets."
+                    )
+                kwargs[self.save_key][id(self)] = deepcopy(params)
+            return self.apply_with_params(params, **kwargs)
+
+        return kwargs
+
+    def __call__(self, img, mask, weight_map=None):
+        """
+            img (np.ndarray): Image to be rotated.
+        Returns:
+            np.ndarray: Rotated image.
+        """
+
+        if weight_map is not None:
+            # before = (mask == 1).sum()
+            output = self.trans(image=img, mask=mask)
+            img = output.get('image')
+            mask = output.get('mask')
+
+            return img, mask, weight_map
+
+        else:
+            output = self.trans(image=img, mask=mask)
+            img = output.get('image')
+            mask = output.get('mask')
+
+            return img, mask
 
 
 
@@ -1881,33 +1941,33 @@ class MultiScaleFlipAug(object):
         repr_str = self.__class__.__name__
         repr_str += (
                     #  f'(flip={self.flip}, '
-                     f'img_ratios={self.img_ratios}), '
+                       f'img_ratios={self.img_ratios}), '
                      f'resize_to_multiple={self.if_resize_to_multiple}), '
                      f'min_size={self.min_size}), '
                      f'flip_direction={self.flip_direction})')
         return repr_str
 
-    def construct_flip_param(self):
+    # def construct_flip_param(self):
 
-        #flip_aug = [False, True] if self.flip else [False]
-        flip_aug = [False]
-        flip_direction = []
-        flip_direction.append(self.flip_direction[0])
-        #if len(self.flip_direction) == 2:
-            #flip_aug.append(True)
-
-
-        #flip_direction = self.flip_direction.copy()
-        if self.flip:
-            #flip_direction.append(flip_direction[0])
-            for flip_direct in self.flip_direction:
-                flip_aug.append(True)
-                flip_direction.append(flip_direct)
+    #     #flip_aug = [False, True] if self.flip else [False]
+    #     flip_aug = [False]
+    #     flip_direction = []
+    #     flip_direction.append(self.flip_direction[0])
+    #     #if len(self.flip_direction) == 2:
+    #         #flip_aug.append(True)
 
 
-        assert len(flip_aug) == len(flip_direction)
+    #     #flip_direction = self.flip_direction.copy()
+    #     if self.flip:
+    #         #flip_direction.append(flip_direction[0])
+    #         for flip_direct in self.flip_direction:
+    #             flip_aug.append(True)
+    #             flip_direction.append(flip_direct)
 
-        return list(zip(flip_aug, flip_direction))
+
+    #     assert len(flip_aug) == len(flip_direction)
+
+    #     return list(zip(flip_aug, flip_direction))
 
 
     def norm(self, img):
@@ -1951,9 +2011,7 @@ class MultiScaleFlipAug(object):
             "imgs" : [],
             "flip" : []
         }
-
         # flip_param = self.construct_flip_param()
-
 
         # short side is 480
         if self.min_size is not None:
@@ -1982,6 +2040,7 @@ class MultiScaleFlipAug(object):
         #     img = cv2.resize(img, (int(new_w), int(new_h)))
 
         # print(img.shape, '1')
+        # print('inside class :  {}'.format(self.flip_direction))
 
         for ratio in self.img_ratios:
 
@@ -2038,8 +2097,6 @@ class MultiScaleFlipAug(object):
                     flipped_img = cv2.flip(flipped_img, 0)
                     img_meta['flip'].append(direction)
 
-
-            # else:
                 if direction == 'none':
                     flipped_img = resized_img
                     img_meta['flip'].append(direction)
@@ -2741,7 +2798,6 @@ class RandomChoice():
 #segmap_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)/testA_16_anno.bmp'
 #img = cv2.imread(img_path)
 #seg_map = cv2.imread(segmap_path, -1)
-#trans = MultiScaleFlipAug(
 #    #img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
 #    img_ratios=[1],
 #    flip=True,

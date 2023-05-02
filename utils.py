@@ -15,7 +15,7 @@ import skimage.morphology as morph
 
 
 import transforms
-from dataset import Glas, PreTraining, CRAG
+from dataset import Glas, PreTraining, CRAG, CropPretraining
 from conf import settings
 from metric import eval_metrics, gland_accuracy_object_level
 
@@ -327,62 +327,6 @@ def get_model(model_name, input_channels, class_num, args=None):
 #            np.nan_to_num(iou, nan=nan_to_num)
 #    return all_acc, acc, iou
 
-def plot_dataset(dataset, out_dir, class_num, num=9, class_id=4, ignore_idx=255):
-    colors = [
-        [1, 122, 33],
-  	    (255,255,255),
- 		(255,0,0),
- 		(0,255,0),
- 		(0,0,255),
- 		(255,255,0),
- 		(0,255,255),
-        (255,0,255),
-        (192,192,192),
-        (128,128,128),
-        (128,0,0),
-        (128,128,0),
-        (0,128,0),
-        (128,0,128),
-        (0,128,128),
-        (0,0,128),
-        (128,0,0),
-        (255,255,224),
-        (250,250,210),
-        (139,69,19),
-        (160,82,45),
-        (210,105,30),
-        (244,164,96),
-        (176,196,222),
-        (240,255,240),
-        (105,105,105),
-    ]
-    colors = random.choices(colors, k=class_num)
-    transforms = dataset.transforms
-    for idx in range(num):
-        i = random.choice(range(len(dataset)))
-        img, label = dataset[i]
-
-        label = label
-        ignore_mask = label == ignore_idx
-        #print(ignore_idx)
-        #if 0 != class_id:
-        #    label[ignore_mask] = 0
-        #else:
-        #    label[ignore_mask] = 1
-
-        #label[label == class_id] = 255
-        #label[label != 255] = 0
-        out_mask = cv2.cvtColor(label, cv2.COLOR_GRAY2BGR)
-        for cid in range(class_num):
-            out_mask[label == cid] = colors[cid]
-
-        out_mask[ignore_mask] = (0, 0, 0)
-        img = np.concatenate((img, out_mask), axis=1)
-        cv2.imwrite(os.path.join(out_dir, 'label{}.png'.format(idx)), img)
-
-
-
-    dataset.transforms = transforms
 
 def print_eval(class_names, results):
     assert len(class_names) == len(results)
@@ -398,77 +342,86 @@ def print_eval(class_names, results):
 
 def pretrain_training_transforms():
 
-    #crop_size=(256, 256)
-    #crop_size=(480, 480)
-    crop_size=(256, 256)
+    crop_size = (384, 384)
     trans = transforms.Compose([
-            transforms.ElasticTransform(alpha=10, sigma=3, alpha_affine=20, p=0.5),
-            # transforms.RandomRotation(degrees=90, expand=False),
-            transforms.RandomRotation(degrees=90, expand=True),
+
+            transforms.RandomChoice
+                (
+                    [
+                        # nothing:
+                        transforms.Compose([]),
+
+                        # h:
+                        transforms.RandomHorizontalFlip(p=1),
+
+                        # v:
+                        transforms.RandomVerticalFlip(p=1),
+
+                        # hv:
+                        transforms.Compose([
+                               transforms.RandomVerticalFlip(p=1),
+                               transforms.RandomHorizontalFlip(p=1),
+                        ]),
+
+                         #r90:
+                        # transforms.RandomRotation(degrees=(90, 90), expand=True, p=1),
+                        # transforms.MyRotate90(degrees=(90, 90), expand=True, p=1),
+                        transforms.MyRotate90(p=1),
+
+                        # #r90h:
+                        transforms.Compose([
+                            # transforms.RandomRotation(degrees=(90, 90), expand=True, p=1),
+                            transforms.MyRotate90(p=1),
+                            transforms.RandomHorizontalFlip(p=1),
+                        ]),
+
+                        # #r90v:
+                        transforms.Compose([
+                            # transforms.RandomRotation(degrees=(90, 90), expand=True, p=1),
+                            transforms.MyRotate90(p=1),
+                            transforms.RandomVerticalFlip(p=1),
+                        ]),
+
+                        # #r90hv:
+                        transforms.Compose([
+                            # transforms.RandomRotation(degrees=(90, 90), expand=True, p=1),
+                            transforms.MyRotate90(p=1),
+                            transforms.RandomHorizontalFlip(p=1),
+                            transforms.RandomVerticalFlip(p=1),
+                        ]),
+                    ]
+                ),
+
+            # transforms.ElasticTransformWrapper(),
             transforms.Resize(range=[0.5, 1.5], size=crop_size),
-            #transforms.Resize(min_size=208 + 30),
-            #transforms.Resize(min_size=256),
-            transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=1, pad_if_needed=True),
-            transforms.RandomVerticalFlip(),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomApply(
-                transforms=[transforms.PhotoMetricDistortion()]
-            ),
+            transforms.MyElasticTransform(keep_class=False),
+        #    # transforms.ElasticTransform(alpha=10, sigma=3, alpha_affine=30, p=0.5),
+            transforms.RandomRotation(degrees=(0, 90), expand=True),
+            # transforms.RandomApply([
+            transforms.PhotoMetricDistortion(),
+        #    # ]),
+            transforms.MyGaussianBlur(),
+            transforms.MyToGray(),
+            transforms.RandomCrop(crop_size=(320, 320), keep_ratio=False, pad_if_needed=True),
             transforms.ToTensor(),
             transforms.Normalize(settings.MEAN, settings.STD)
         ])
 
-    #import transforms_pretrain
-    #trans = transforms_pretrain.Compose([
-    #        #transforms_pretrain.EncodingLable(),
-    #        transforms_pretrain.RandomHorizontalFlip(),
-    #        transforms_pretrain.RandomVerticalFlip(),
-    #        transforms_pretrain.RandomRotation(15, fill=0),
-    #        transforms_pretrain.ColorJitter(0.4, 0.4),
-    #        transforms_pretrain.RandomGaussianBlur(),
-    #        transforms_pretrain.RandomScaleCrop(settings.IMAGE_SIZE),
-    #        transforms_pretrain.ToTensor(),
-    #        transforms_pretrain.Normalize(settings.MEAN, settings.STD),
-    #    ])
 
     return trans
 
 def pretrain_test_transforms():
 
-    trans = transforms.MultiScaleFlipAug(
-            #img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
-            img_ratios=[1],
-            #flip=True,
-            flip=False,
-            #flip_direction=['horizontal', 'vertical'],
-            #flip_direction=['horizontal'],
-            flip_direction=['h', 'v'],
-            # transforms=[
-                # transforms.ToTensor(),
-                # transforms.Normalize(settings.MEAN, settings.STD),
-            # ]
-            resize_to_multiple=False,
-            #min_size=256,
-            #min_size=480,
-            #min_size=480,
-            min_size=480,
-            #min_size=224,
-            #min_size=None,
-            mean=settings.MEAN,
-            std=settings.STD,
-        )
-    #import transforms_pretrain
-    #trans = transforms_pretrain.Compose([
-    #        #transforms_pretrain.EncodingLable(),
-    #        #transforms_pretrain.RandomHorizontalFlip(),
-    #        #transforms_pretrain.RandomVerticalFlip(),
-    #        #transforms_pretrain.RandomRotation(15, fill=0),
-    #        #transforms_pretrain.ColorJitter(0.4, 0.4),
-    #        #transforms_pretrain.RandomGaussianBlur(),
-    #        transforms_pretrain.RandomScaleCrop(settings.IMAGE_SIZE),
-    #        transforms_pretrain.ToTensor(),
-    #        transforms_pretrain.Normalize(settings.MEAN, settings.STD),
-    #    ])
+
+    # crop_size = (384, 384)
+    trans = transforms.Compose([
+
+            #transforms.Resize(size=crop_size),
+            transforms.MySmallestMaxSize(max_size=320),
+            transforms.ToTensor(),
+            transforms.Normalize(settings.MEAN, settings.STD)
+        ])
+
 
     return trans
 
@@ -485,9 +438,8 @@ def data_loader(args, image_set):
 
     if args.pretrain:
 
-        dataset = PreTraining(
-                #'data/pre_training/',
-                image_set=image_set
+        dataset = CropPretraining(
+                img_set=image_set,
             )
 
         if image_set == 'train':
@@ -501,21 +453,21 @@ def data_loader(args, image_set):
         print(trans)
         print()
 
-        if image_set != 'train':
-            batch_size = 4
-            shuffle = False
-            collate_fn=multiscale_collate
-        else:
-            batch_size = args.b
-            shuffle = True
-            collate_fn=None
+        # if image_set != 'train':
+            # batch_size = 4
+            # shuffle = False
+            # collate_fn=multiscale_collate
+        # else:
+            # batch_size = args.b
+            # shuffle = True
+            # collate_fn=None
 
         data_loader = torch.utils.data.DataLoader(
                 dataset,
-                batch_size=batch_size,
+                batch_size=args.b,
                 num_workers=4,
-                shuffle=shuffle,
-                collate_fn=collate_fn,
+                shuffle=True,
+                # collate_fn=collate_fn,
                 persistent_workers=True,
                 prefetch_factor=4,
                 pin_memory=True)
@@ -545,12 +497,16 @@ def data_loader(args, image_set):
         raise ValueError('datset {} not supported'.format(args.dataset))
 
     if args.dataset == 'Glas':
-            crop_size=(480, 480)
+            # crop_size=(480, 480)
+            #crop_size=(416, 416)
+            crop_size = settings.CROP_SIZE_GLAS
 
     if args.dataset == 'crag':
-            crop_size=(768, 768)
+            # crop_size=(768, 768)
             #crop_size=(1024, 1024)
-    if image_set == 'train':
+            crop_size = settings.CROP_SIZE_CRAG
+    # if image_set == 'train':
+    if image_set in ['trainA', 'trainB', 'train', 'all']:
         trans = transforms.Compose([
 
             transforms.RandomChoice
@@ -601,16 +557,16 @@ def data_loader(args, image_set):
                 ),
 
             # transforms.ElasticTransformWrapper(),
-            transforms.MyElasticTransform(),
             transforms.Resize(range=[0.5, 1.5]),
         #    # transforms.ElasticTransform(alpha=10, sigma=3, alpha_affine=30, p=0.5),
             transforms.RandomRotation(degrees=(0, 90), expand=True),
+            transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True),
+            transforms.MyElasticTransform(),
             # transforms.RandomApply([
             transforms.PhotoMetricDistortion(),
         #    # ]),
             transforms.MyGaussianBlur(),
             transforms.MyToGray(),
-            transforms.RandomCrop(crop_size=crop_size, cat_max_ratio=0.75, pad_if_needed=True),
             transforms.ToTensor(),
             transforms.Normalize(settings.MEAN, settings.STD)
         ])
@@ -631,7 +587,7 @@ def data_loader(args, image_set):
         #     transforms.Normalize(settings.MEAN, settings.STD)
         # ])
 
-    elif image_set == 'val':
+    elif image_set in ['val', 'testA', 'testB']:
         #trans = transforms.Compose([
         #    #transforms.RandomScaleCrop(settings.IMAGE_SIZE),
         #    transforms.EncodingLable(),
@@ -650,8 +606,8 @@ def data_loader(args, image_set):
             #flip_direction=['h', 'v'],
             #flip_direction=['h', 'v', 'hv', 'r90'],
             #flip_direction=['h', 'v', 'r90'], + 1
-            #flip_direction=['h', 'v', 'vh', 'hv'],
-            flip_direction=['h', 'v', 'hv'],
+            #flip_direction=['none', 'h', 'v', 'hv'],
+            flip_direction=['none', 'h', 'v', 'hv'],
             #flip_direction=['h', 'v', 'r90h'],
             #flip_direction=['h', 'v', 'r90v'],
             # flip_direction=['h', 'v', 'hv', 'r90', 'r90h', 'r90v', 'r90hv', 'none'],
@@ -674,44 +630,44 @@ def data_loader(args, image_set):
             std=settings.STD
         )
 
-    elif image_set in ['test', 'testA', 'testB']:
-        # trans = transforms.Compose([
-        #     transforms.ToTensor(),
-        #     #transforms.Normalize(settings.MEAN, settings.STD),
-        # ])
-        trans = transforms.MultiScaleFlipAug(
-            # img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
-            # flip=True,
-            # # flip_direction=['horizontal', 'vertical'],
-            # flip_direction=['horizontal'],
-            # transforms=[
-            #     transforms.ToTensor(),
-            #     transforms.Normalize(settings.MEAN, settings.STD),
-            # ]
+    # elif image_set in ['test', 'testA', 'testB']:
+    #     # trans = transforms.Compose([
+    #     #     transforms.ToTensor(),
+    #     #     #transforms.Normalize(settings.MEAN, settings.STD),
+    #     # ])
+    #     trans = transforms.MultiScaleFlipAug(
+    #         # img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
+    #         # flip=True,
+    #         # # flip_direction=['horizontal', 'vertical'],
+    #         # flip_direction=['horizontal'],
+    #         # transforms=[
+    #         #     transforms.ToTensor(),
+    #         #     transforms.Normalize(settings.MEAN, settings.STD),
+    #         # ]
 
-            #img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
-            img_ratios=[1],
-            flip=True,
-            #flip=False,
-            #flip_direction=['horizontal', 'vertical', ],
-            #flip_direction=['h', 'v'],
-            #flip_direction=['h', 'v', 'hv', 'r90'],
-            flip_direction=['h', 'v'],
-            #flip_direction=['h', 'v'],
-            #flip_direction=['horizontal'],
-            # transforms=[
-                # transforms.ToTensor(),
-                # transforms.Normalize(settings.MEAN, settings.STD),
-            # ]
-            resize_to_multiple=False,
-            #min_size=208,
-            #min_size=None,
-            #min_size=480,
-            #min_size=1024,
-            min_size=crop_size[0],
-            mean=settings.MEAN,
-            std=settings.STD
-        )
+    #         #img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
+    #         img_ratios=[1],
+    #         flip=True,
+    #         #flip=False,
+    #         #flip_direction=['horizontal', 'vertical', ],
+    #         #flip_direction=['h', 'v'],
+    #         #flip_direction=['h', 'v', 'hv', 'r90'],
+    #         flip_direction=['h', 'v'],
+    #         #flip_direction=['h', 'v'],
+    #         #flip_direction=['horizontal'],
+    #         # transforms=[
+    #             # transforms.ToTensor(),
+    #             # transforms.Normalize(settings.MEAN, settings.STD),
+    #         # ]
+    #         resize_to_multiple=False,
+    #         #min_size=208,
+    #         #min_size=None,
+    #         #min_size=480,
+    #         #min_size=1024,
+    #         min_size=crop_size[0],
+    #         mean=settings.MEAN,
+    #         std=settings.STD
+    #     )
 
     else:
         raise ValueError('image_set should be one of "train", "val", \
@@ -732,10 +688,12 @@ def data_loader(args, image_set):
 
     #    return res
 
-    if image_set == 'test':
-        data_loader = torch.utils.data.DataLoader(
-            dataset, batch_size=1, num_workers=4, shuffle=False, pin_memory=True, persistent_workers=True)
-    elif image_set == 'val':
+    # if image_set == 'test':
+        # data_loader = torch.utils.data.DataLoader(
+            # dataset, batch_size=1, num_workers=4, shuffle=False, pin_memory=True, persistent_workers=True)
+
+    print(image_set)
+    if image_set in ['val', 'testA', 'testB']:
         data_loader = torch.utils.data.DataLoader(
             dataset, batch_size=4, num_workers=4, shuffle=False, pin_memory=True, persistent_workers=True,
             collate_fn=multiscale_collate)
@@ -1021,6 +979,8 @@ class CheckPointManager:
             'testB_Dice',
             'total_F1',
             'total_Dice',
+            'acc',
+            'dice',
         ]
 
         self.le = [
@@ -1034,6 +994,20 @@ class CheckPointManager:
         self.ckpt_keep_queue = queue.Queue()
 
         self.best_value = {}
+
+        self.default_value = {
+            'testA_F1' : 0,
+            'testA_Dice' : 0,
+            'testB_F1' : 0,
+            'testB_Dice' : 0,
+            'total_F1' : 0,
+            'total_Dice' : 0,
+            'acc' : 0,
+            'dice' : 0,
+            'testA_Haus' : 99999,
+            'testB_Haus' : 99999,
+            'total_Haus' : 99999,
+        }
         self.best_path = {}
 
 
@@ -1049,7 +1023,6 @@ class CheckPointManager:
     def assert_values(self, values):
         for v in values:
             assert isinstance(v, numbers.Number)
-
 
     def save_ckp_iter(self, model, iter_idx):
         ckpt_save_path = os.path.join(
@@ -1069,11 +1042,16 @@ class CheckPointManager:
 
 
     def if_update(self, m, v):
+
         if not isinstance(v, numbers.Number):
             raise ValueError('{} should be a number'.format(v))
 
+        if m not in self.best_value:
+            self.best_value[m] = self.default_value[m]
+
         if m in self.lg:
             # the more the better
+
             if self.best_value[m] < v:
                 return True
 
@@ -1091,10 +1069,6 @@ class CheckPointManager:
         self.assert_values(values)
 
         for m, v in zip(metrics, values):
-
-            if m not in self.best_value:
-                self.best_value[m] = v
-
 
             if self.if_update(m, v):
 

@@ -25,8 +25,8 @@ class CRAG(Dataset):
         #if download:
             #download_url(url, path, file_name, md5=md5)
 
-        self.class_names = ['background', 'gland']
-        #self.class_names = ['background', 'gland', 'cnt']
+        #self.class_names = ['background', 'gland']
+        self.class_names = ['background', 'gland', 'cnt']
         # self.ignore_index = -100
         self.ignore_index = 255
         self.class_num = len(self.class_names)
@@ -46,6 +46,9 @@ class CRAG(Dataset):
         self.weight_maps = []
         if image_set == 'train':
             search_path = os.path.join(path, image_set, '**', '*.png')
+
+        elif image_set == 'all':
+            search_path = os.path.join(path, '**', '*.png')
         else:
             search_path = os.path.join(path, 'valid', '**', '*.png')
         # if image_set not in ['train', 'testA', 'testB', 'val']:
@@ -56,10 +59,15 @@ class CRAG(Dataset):
             # label_re = 'test[A|B]' +  '_[0-9]+_' + 'anno' + '\.bmp'
 
         self.image_names = []
+        count = 0
         for img_filename in glob.iglob(search_path, recursive=True):
             if 'Images' not in img_filename:
                 continue
 
+            count += 1
+            #if image_set not in ['train', 'all']:
+            #    if count > 5:
+            #        continue
             self.images.append(cv2.imread(img_filename, -1))
             #if re.search(label_re, bmp):
                 #print(bmp)
@@ -70,7 +78,11 @@ class CRAG(Dataset):
             basename = os.path.basename(img_filename)
             self.image_names.append(basename)
             weightmap_filename = os.path.join(self.weightmap_path, basename.replace('.png', '_weight.png'))
-            if image_set == 'train':
+            # if image_set == 'train':
+
+
+            print(count)
+            if image_set in ['train', 'all']:
                 self.weight_maps.append(
                     cv2.imread(weightmap_filename, -1))
 
@@ -119,21 +131,21 @@ class CRAG(Dataset):
             return label
 
     def __len__(self):
-        if self.image_set == 'train':
+        if self.image_set in ['train', 'all']:
             return len(self.images) * self.times
         else:
             return len(self.images)
 
     def __getitem__(self, index):
 
-        if self.image_set == 'train':
+        if self.image_set in ['train', 'all']:
             index = index % len(self.images)
 
         image = self.images[index]
         label = self.labels[index]
 
 
-        if self.image_set != 'train':
+        if self.image_set not in ['train', 'all']:
             img_meta = self.transforms(image, label)
             #print(index, self.image_set, len(self), len(self.images))
             img_meta['img_name'] = self.image_names[index]

@@ -12,6 +12,8 @@ import models.backbones.resnet as resnet
 #import models.head.fcnhead as fcnhead
 #from models.head.fcnhead import FCNHead, UpSample2d
 #from models.dual_gcn import DualGCNHead
+from functools import partial
+
 
 class BasicConv2d(nn.Module):
 
@@ -118,7 +120,7 @@ class GraphNet(nn.Module):
         residual = (x.view(B, C, -1).permute(0, 2, 1).unsqueeze(1).contiguous() - self.anchor.unsqueeze(1)).div(sigma.unsqueeze(1)  + 1e-7)
         #residual_norm = torch.norm(residual, dim=3, p='fro')
         #residual_pow = -torch.pow(residual_norm, 2) / 2
-        residual_pow = - torch.pow(torch.norm(residual, dim=3, p='fro'), 2) / 2
+        residual_pow = -torch.pow(torch.norm(residual, dim=3, p='fro'), 2) / 2
         soft_assign = F.softmax(residual_pow, dim=1)
         #print(soft_assign.shape)
         #import sys; sys.exit()
@@ -203,20 +205,11 @@ class GraphNet(nn.Module):
         # We constrain the range of each element in σk to (0, 1)
         # by defining σk as the output of a sigmoid function.
         sigma = torch.sigmoid(self.sigma)
-        #import time
-        #t1 = time.time()
+
         soft_assign = self.gen_soft_assign(x, sigma) # B x C x N(N=HxW)
-        #t2 = time.time()
+
         #soft_assign1 = self.gen_soft_assign1(x, sigma) # B x C x N(N=HxW)
-        #t3 = time.time()
-        #print(t2 - t1)
-        #print(t3 - t2)
-        #print((soft_assign - soft_assign1).mean())
-        #print(torch.cuda.memory_summary())
-        #import sys; sys.exit()
-        #print(torch.isnan(x).sum().item(), soft_assign.mean().item())
-        #
-        #with torch.no_grad():
+
         nodes = self.gen_nodes(x, sigma, soft_assign)
 
 
@@ -295,8 +288,11 @@ class GCU(nn.Module):
 
 
 
-    def forward(self, x, queue=None):
+    def forward(self, x, queue=None, hook=None):
         graph, assign = self.project(x)
+        if hook is not None:
+            hook(array=assign)
+
         graph = self.gcns(graph)
 
         # graph : [16, 256, 8][B, dim, num_nodes]
@@ -344,17 +340,30 @@ class GraphHead(nn.Module):
     #    m = m.permute(0, 2, 1).contiguous()
     #    return m
 
-    def forward(self, x, queue=None):
+    def forward(self, x, queue=None, hook=None):
 
         out = []
         inputs = x.split(64, dim=1)
         assert len(inputs) == 4
-        #print(inputs[0].shape, x.shape)
-        out.append(self.gcu_2(inputs[0]))
-        out.append(self.gcu_4(inputs[1]))
-        out.append(self.gcu_8(inputs[2]))
-        out.append(self.gcu_16(inputs[3]))
+        if hook is not None:
+            out.append(self.gcu_2(inputs[0], hook=partial(hook, name='gcu_2')))
+            out.append(self.gcu_4(inputs[1], hook=partial(hook, name='gcu_4')))
+            out.append(self.gcu_8(inputs[2], hook=partial(hook, name='gcu_8')))
+            out.append(self.gcu_16(inputs[3], hook=partial(hook, name='gcu_16')))
+        else:
+            out.append(self.gcu_2(inputs[0]))
+            out.append(self.gcu_4(inputs[1]))
+            out.append(self.gcu_8(inputs[2]))
+            out.append(self.gcu_16(inputs[3]))
+
         #out.append(self.gcu_32(inputs[3]))
+        # if hook is not None:
+        #     hook(
+        #         gcu_2=out[0],
+        #         gcu_4=out[1],
+        #         gcu_8=out[2],
+        #         gcu_16=out[3]
+        #     )
 
         out = torch.cat(out, dim=1)
 
@@ -497,16 +506,16 @@ class TG(nn.Module):
         #self.fcs = nn.
 
 
-    def forward(self, x):
+    def forward(self, x, hook=None):
 
         B, C, H, W = x.shape
 
 
         feats = self.backbone(x)
-        low_level_feat = self.project(feats['low_level'])
+        low_level_feat = self.project(feats['low_level']) #  120x120
 
-        gland_feats = self.gland_head_project(feats['out'])
-        gland = self.gland_head(gland_feats, queue=self.queue.detach()) # layer 4
+        gland_feats = self.gland_head_project(feats['out']) # 60x60
+        gland = self.gland_head(gland_feats, queue=self.queue.detach(), hook=hook) # layer 4
 
 
         gland = F.interpolate(

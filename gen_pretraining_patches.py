@@ -73,6 +73,11 @@ def convert_to_segmap_crag(img_filename):
     return img_filename.replace('Images', 'Annotation')
 
 
+
+def convert_to_segmap_msuv1(img_filename):
+    return img_filename.replace('.png', '_anno_.png')
+
+
 def convert_to_segmap_glas(img_filename):
     return img_filename.replace('.bmp', '_anno.bmp')
 
@@ -98,6 +103,29 @@ def get_imgfilenames_glas_test(path):
             continue
 
         if 'test'  not in i :
+            continue
+
+        yield i
+
+def get_imgfilenames_glas_train(path):
+    for i in glob.iglob(os.path.join(path, '**', '*.bmp'), recursive=True):
+
+
+
+        if '_anno.bmp' in i:
+            continue
+
+        if 'test' in i :
+            continue
+
+        yield i
+
+def get_imgfilenames_msuv1(path):
+    for i in glob.iglob(os.path.join(path, '**', '*.png'), recursive=True):
+
+
+
+        if '_anno_' in i:
             continue
 
         yield i
@@ -185,6 +213,27 @@ crag_test_args = {
     'crop_size' : 512,
 }
 
+msuv1_args = {
+    'src_path' : '/data/smb/syh/gland_segmentation/PATH-DT-MSU/S1-v1/',
+    'dest_img': '/data/smb/syh/gland_segmentation/PATH-DT-MSU/S1-v1_crop/Images',
+    'dest_anno': '/data/smb/syh/gland_segmentation/PATH-DT-MSU/S1-v1_crop/Annotation',
+    'converter' : convert_to_segmap_msuv1,
+    'file_lists' : get_imgfilenames_msuv1,
+    'prefix' : 'train',
+    'crop_size' : 512,
+}
+
+msuv2_args = {
+    'src_path' : '/data/smb/syh/gland_segmentation/PATH-DT-MSU/S1-v2/',
+    'dest_img': '/data/smb/syh/gland_segmentation/PATH-DT-MSU/S1-v2_crop/Images',
+    'dest_anno': '/data/smb/syh/gland_segmentation/PATH-DT-MSU/S1-v2_crop/Annotation',
+    'converter' : convert_to_segmap_msuv1,
+    'file_lists' : get_imgfilenames_msuv1,
+    'prefix' : 'train',
+    'crop_size' : 512,
+}
+
+
 def run(args):
     src_path = args.get('src_path')
     dest_img = args.get('dest_img')
@@ -228,7 +277,32 @@ def run(args):
                 #    import sys; sys.exit()
                 #print(r_idx, c_idx)
     print(count)
-run(crag_train_args)
-run(crag_test_args)
-run(glas_train_args)
-run(glas_test_args)
+# run(crag_train_args)
+# run(crag_test_args)
+# run(glas_train_args)
+# run(glas_test_args)
+# run(msuv1_args)
+run(msuv2_args)
+
+
+
+def valid_crops(args):
+    img_path = args.get('dest_img')
+    anno_path = args.get('dest_anno')
+    print(img_path, anno_path)
+
+    for idx, i in enumerate(glob.iglob(os.path.join(img_path, '**', '*.jpg'), recursive=True)):
+
+        img_filename = i
+        anno_filename = i.replace('Images', 'Annotation').replace('.jpg', '.png')
+
+        img = cv2.imread(img_filename)
+        anno = cv2.imread(anno_filename, -1)
+
+        res = overlay(img, anno)
+
+        res = cv2.resize(res, (0,0), fx=0.5, fy=0.5)
+        cv2.imwrite('tmp/{}.jpg'.format(idx), res)
+
+
+valid_crops(msuv2_args)

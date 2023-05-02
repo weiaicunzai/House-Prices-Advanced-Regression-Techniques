@@ -10,9 +10,49 @@ from conf import settings
 import utils
 from metric import eval_metrics
 from train import evaluate
+from conf import settings
 #from dataset.camvid import CamVid
 #from metrics import Metrics
 #from model import UNet
+
+
+def gen_trans(combo):
+    trans = transforms.MultiScaleFlipAug(
+            # img_ratios=[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2.0],
+            # rescale=True,
+            img_ratios=[1],
+            # flip=True,
+            #flip=False,
+            #flip_direction=['horizontal', 'vertical', ],
+            #flip_direction=['h', 'v'],
+            #flip_direction=['h', 'v', 'hv', 'r90'],
+            #flip_direction=['h', 'v', 'r90'], + 1
+            #flip_direction=['none', 'h', 'v', 'hv'],
+            flip_direction=combo,
+            #flip_direction=['h', 'v', 'r90h'],
+            #flip_direction=['h', 'v', 'r90v'],
+            # flip_direction=['h', 'v', 'hv', 'r90', 'r90h', 'r90v', 'r90hv', 'none'],
+            #flip_direction=['h', 'v'],
+            #flip_direction=['horizontal'],
+            # transforms=[
+                # transforms.ToTensor(),
+                # transforms.Normalize(settings.MEAN, settings.STD),
+            # ]
+            resize_to_multiple=False,
+            #min_size=208,
+            #min_size=None,
+            #min_size=480,
+            #min_size=1024,
+            # min_size=crop_size[0],
+            #min_size=None, # F1 0.8776095444114832, Dice:0.8882521941014574,
+            #min_size=args.size,
+            min_size=480,
+            mean=settings.MEAN,
+            std=settings.STD
+        )
+
+
+    return trans
 
 
 
@@ -29,6 +69,7 @@ if __name__ == '__main__':
                         help='batch size for dataloader')
     parser.add_argument('-pretrain', action='store_true', default=False, help='pretrain data')
     parser.add_argument('-branch', type=str, default='hybird', help='dataset name')
+    parser.add_argument('-imgset', type=str, default='train', help='dataset name')
 
     args = parser.parse_args()
     print(args)
@@ -40,21 +81,95 @@ if __name__ == '__main__':
 
     # for  i in range(100, 800, 10):
         # args.size = i
-    if args.dataset == 'Glas':
+    # if args.dataset == 'Glas':
             #test_dataloader = utils.data_loader(args, 'testA')
-            test_dataloader = utils.data_loader(args, 'val')
-            test_dataset = test_dataloader.dataset
-            print(test_dataset.transforms)
-            net = utils.get_model(args.net, 3, test_dataset.class_num, args=args)
-            net.load_state_dict(torch.load(args.weight))
-            net = net.cuda()
-            print(args.weight)
-            net.eval()
-            #print('Glas testA')
+    test_dataloader = utils.data_loader(args, 'val')
+    test_dataset = test_dataloader.dataset
+    # print(test_dataset)
+    # print(test_dataset.transforms)
+    net = utils.get_model(args.net, 3, test_dataset.class_num, args=args)
+    net.load_state_dict(torch.load(args.weight))
+    net = net.cuda()
+    print(args.weight)
+    net.eval()
+    #print('Glas testA')
+
+
+    augs = ['h', 'v', 'hv', 'r90', 'r90h', 'r90v', 'r90hv', 'none']
+    from itertools import combinations
+    count = 0
+    # transforms = test_dataset.transforms
+
+    img_set = args.imgset
+    if img_set == 'trainA':
+        val_set = 'testB'
+
+    if img_set == 'trainB':
+        val_set = 'testA'
+
+    if img_set == 'train':
+        val_set = 'val'
+
+    test_dataloader = utils.data_loader(args, val_set)
+    dataset = test_dataloader.dataset
+    print('dataset:', len(dataset))
+    multiscale_collate = test_dataloader.collate_fn
+
+
+
+    for i in range(1, len(augs) + 1):
+    #     # print(i)
+        for combo in list(combinations(augs, i)):
+            count += 1
+
+    #         # test_dataset.transforms.flip_direction = combo
+
+    #         # transforms.flip_direction = combo
+    #         #print(combo)
+    #         trans = gen_trans(list(combo))
+    #         test_dataset.transforms = gen_trans(list(combo))
+    #         test_dataloader.dataset.transforms = trans
+    #         print(id(test_dataset.transforms), id(test_dataloader.dataset.transforms), id(trans))
+
+
+            #test_dataloader.dataset.transforms.flip_direction = ['none', 'hv']
+            #test_dataloader.dataset.transforms.flip_direction = list(combo)
+            #if count == 1:
+            #    combo1 = ['none', 'hv']
+            #else:
+            #    combo1 = ['r90', 'r90hv']
+            # test_dataloader = utils.data_loader(args, 'val')
+            dataset.transforms.flip_direction = combo
+            dataset.transforms.min_size = 768
+
+            test_dataloader = torch.utils.data.DataLoader(
+                dataset, batch_size=4, num_workers=4, shuffle=False, pin_memory=True, persistent_workers=True,
+                collate_fn=multiscale_collate)
+
+            print(len(test_dataloader))
+
+            # print(combo1,  test_dataloader.dataset.transforms.flip_direction, id(test_dataloader.dataset.transforms.flip_direction))
             with torch.no_grad():
-                    results = evaluate(net, test_dataloader, args)
+                    results = evaluate(net, test_dataloader, args, val_set)
+                    print('test dataset transforms is: ', test_dataloader.dataset.transforms)
                     for key, values in results.items():
                         print('{}: F1 {}, Dice:{}, Haus:{}'.format(key, *values))
+                    # print(id(test_dataloader.dataset))
+
+                    #for img_metas in test_dataloader:
+                    ##     #print(len(img_meta))
+                    #     for img_meta in img_metas:
+                    #         print(img_meta['flip'], img_meta['img_name'], id(test_dataloader.dataset.transforms.flip_direction))
+                    ##         pass
+
+
+            # if count == 3:
+            #     import sys; sys.exit()
+
+
+
+
+
 
             #utils.test(
             #    net,
