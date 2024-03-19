@@ -25,8 +25,8 @@ class CRAG(Dataset):
         #if download:
             #download_url(url, path, file_name, md5=md5)
 
-        #self.class_names = ['background', 'gland']
-        self.class_names = ['background', 'gland', 'cnt']
+        self.class_names = ['background', 'gland']
+        #self.class_names = ['background', 'gland', 'cnt']
         # self.ignore_index = -100
         self.ignore_index = 255
         self.class_num = len(self.class_names)

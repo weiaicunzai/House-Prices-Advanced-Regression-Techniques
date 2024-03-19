@@ -24,8 +24,8 @@ class Glas(Dataset):
         if download:
             download_url(url, path, file_name, md5=md5)
 
-        #self.class_names = ['background', 'gland']
-        self.class_names = ['background', 'gland', 'cnt']
+        self.class_names = ['background', 'gland']
+        #self.class_names = ['background', 'gland', 'cnt']
         # self.ignore_index = -100
         self.ignore_index = 255
         self.class_num = len(self.class_names)
@@ -109,6 +109,10 @@ class Glas(Dataset):
         self.mean = (0.7851387990848604, 0.5111793462233759, 0.787433705481764)
         self.std = (0.13057256006459803, 0.24522816688399154, 0.16553457394913107)
         self.times = 30000
+
+
+        # self.images = []
+        # self.images.append(img)
 
     def construct_contour(self, label):
         if self.image_set == 'train' and self.class_num == 3:

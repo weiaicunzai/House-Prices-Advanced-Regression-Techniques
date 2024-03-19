@@ -25,7 +25,7 @@ from lr_scheduler import PolynomialLR, WarmUpLR, WarmUpWrapper
 from metric import eval_metrics, gland_accuracy_object_level
 from dataloader import IterLoader
 import test_aug
-from losses import DiceLoss, WeightedLossWarpper, GlandContrastLoss, TI_Loss, soft_dice_cldice
+from losses import DiceLoss, WeightedLossWarpper, GlandContrastLoss, TI_Loss
 import sampler as _sampler
 
 
@@ -80,11 +80,10 @@ def train(net, train_dataloader, val_loader, writer, args, val_set):
     gland_loss_fn_dice = WeightedLossWarpper(gland_loss_fn_dice, sampler)
     #loss_fn_ce = WeightedLossWarpper(loss_fn_ce, sampler)
     #loss_fn_dice = WeightedLossWarpper(loss_fn_dice, sampler)
-    cl_dice = soft_dice_cldice(iter_=50)
 
     ti_loss_weight = 1e-4
         #ti_loss_func = TI_Loss(dim=2, connectivity=4, inclusion=[[1,2]], exclusion=[[2,3],[3,4]])
-    ti_loss_func = TI_Loss(dim=2, connectivity=4, inclusion=[[1,2]], exclusion=[[2,3],[3,4]])
+    ti_loss_func = TI_Loss(dim=2, connectivity=4, inclusion=[[1,2]], exclusion=[])
     # ti_loss_value = ti_loss_func(x, y) if ti_loss_weight != 0 else 0
     # ti_loss_value = ti_loss_weight * ti_loss_value
 
@@ -202,20 +201,28 @@ def train(net, train_dataloader, val_loader, writer, args, val_set):
                 #print(weight_maps.mean())
                 #mask = contrasive_loss(gland_preds, masks)
 
+                #for g_p, m in zip(gland_preds, masks):
+                y = torch.stack([masks==i for i in range(masks.max()+1)], dim=1).long()
+                # print(y.shape, y[3, :, 4, 4])
 
-                loss = loss * weight_maps + 0.4 * loss_aux * weight_maps
 
-                if args.net == 'tg':
-                    loss = loss.mean()
 
-                if args.net == 'tgt':
+                ti_loss_value = ti_loss_func(gland_preds, y) if ti_loss_weight != 0 else 0
+                ti_loss_value = ti_loss_weight * ti_loss_value
+                # print(ti_loss_value)
 
-                    # contrasive_time_start = time.time()
-                    contrasive_loss, xor_mask = contrasive_loss_fn(out, gland_preds, masks, queue=net.queue, queue_ptr=net.queue_ptr, fcs=net.fcs)
-                    # contrasive_time_end = time.time()
 
-                    sup_loss = (loss + xor_mask * loss).mean()
-                    loss = sup_loss + args.alpha * contrasive_loss
+                loss = loss * weight_maps + 0.4 * loss_aux * weight_maps + ti_loss_value
+
+                # if args.net == 'tg':
+                loss = loss.mean()
+
+                # if args.net == 'tgt':
+
+                    # contrasive_loss, xor_mask = contrasive_loss_fn(out, gland_preds, masks, queue=net.queue, queue_ptr=net.queue_ptr, fcs=net.fcs)
+
+                    # sup_loss = (loss + xor_mask * loss).mean()
+                    # loss = sup_loss + args.alpha * contrasive_loss
 
 
                 #loss = loss.mean()
@@ -605,8 +612,6 @@ def evaluate(net, val_dataloader, args, val_set):
     # print('dataset size:', len())
     with torch.no_grad():
         for img_metas in tqdm(val_dataloader):
-            #print(type(val_dataloader))
-            #import sys; sys.exit()
             for img_meta in img_metas:
 
 

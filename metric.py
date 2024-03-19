@@ -225,7 +225,7 @@ def gland_accuracy_object_level(pred, gt):
     # --- compute F1 --- #
     TP = 0.0  # true positive
     FP = 0.0  # false positive
-    for i in range(1, Ns + 1):
+    for i in range(1, Ns + 1): # predict number
         pred_i = np.where(pred_labeled == i, 1, 0)
         img_and = np.logical_and(gt_labeled, pred_i)
 

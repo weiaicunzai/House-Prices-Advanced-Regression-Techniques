@@ -599,6 +599,8 @@ def tg(num_classes):
     backbone.global_pool = nn.Identity()
     #print(backbone)
     net = TG(backbone=backbone, num_classes=num_classes)
+    # print(num_classes)
+    # import sys; sys.exit()
     return net
 
 

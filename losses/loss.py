@@ -86,6 +86,10 @@ class GlandContrastLoss(nn.Module):
         gt = cv2.resize(gt, out_size[::-1], interpolation=cv2.INTER_NEAREST)
         pred = cv2.resize(pred, out_size[::-1], interpolation=cv2.INTER_NEAREST)
 
+        count_over_conn = 0
+        count_under_conn = 0
+
+
         if op == 'none':
             return np.zeros(gt.shape, dtype=np.uint8)
 
@@ -163,6 +167,8 @@ class GlandContrastLoss(nn.Module):
 
                 #res[pred_labeled == i] = 1
                 res[pred_labeled_i] = 1
+                count_over_conn += 1
+
                 continue
 
             # one pred gland contains more than one gt glands
@@ -172,11 +178,14 @@ class GlandContrastLoss(nn.Module):
                 #res[pred_labeled == i] = 1
                 res[pred_labeled_i] = 1
 
+                count_over_conn += 1
+
             else:
                 # corresponding gt gland area is less than 50%
                 if mask.sum() / pred_labeled_i.sum() < 0.5:
                     #res[pred_labeled == i] = 1
                     res[pred_labeled_i] = 1
+                    count_over_conn += 1
                     #pred_labeled_i_xor = np.logical_xor(pred_labeled_i, mask)
                     #res[pred_labeled_i_xor] = 1
 
@@ -203,12 +212,14 @@ class GlandContrastLoss(nn.Module):
                 #res[gt_labeled == i] = 1
                 res[gt_labeled_i] = 1
                 #cv2.imwrite('resG{}.png'.format(i), res)
+                count_under_conn += 1
                 continue
 
             if pred_labeled[mask].min() != pred_labeled[mask].max():
                 #res[gt_labeled == i] = 1
                 res[gt_labeled_i] = 1
                 #cv2.imwrite('resG{}.png'.format(i), res)
+                count_under_conn += 1
 
             else:
                 if mask.sum() / gt_labeled_i.sum() < 0.5:
@@ -216,6 +227,7 @@ class GlandContrastLoss(nn.Module):
                     #print(i, i, i, i)
                     #res[gt_labeled == i] = 1
                     res[gt_labeled_i] = 1
+                    count_under_conn += 1
             #print(mask.sum() / (gt_labeled == i).sum(), 'cc111')
             #start = time.time()
             #for i in range(100):
@@ -280,6 +292,7 @@ class GlandContrastLoss(nn.Module):
             ###################################################
             # cv2.imwrite('my_mutal_alg/final_result.png', res * 255)
             ###################################################
+            #print(pred_num)
             return res
             #return pred_res
             #return gt_res, pred_res, res, cc
@@ -306,7 +319,7 @@ class GlandContrastLoss(nn.Module):
         #print((t2 - t1) / bs)
         self.total_time += (t2 - t1)
         self.total_samples += bs
-        print(self.total_time / self.total_samples)
+        print('avg time:', self.total_time / self.total_samples)
         #import sys; sys.exit()
         res = np.stack(res, axis=0)
         return res

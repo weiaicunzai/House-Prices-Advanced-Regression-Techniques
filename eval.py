@@ -1,19 +1,419 @@
 import os
 import argparse
 import re
+import cv2
 
 import torch
 import torch.nn as nn
 
+import skimage.morphology as morph
 import transforms
 from conf import settings
 import utils
 from metric import eval_metrics
 from train import evaluate
 from conf import settings
+from losses import GlandContrastLoss
+from tqdm import tqdm
+import test_aug
+
+
+import argparse
+import os
+import time
+import re
+import sys
+sys.path.append(os.getcwd())
+import skimage.morphology as morph
+
+from tqdm import tqdm
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.tensorboard import SummaryWriter
+import numpy as np
+from torch.cuda.amp import GradScaler
+from torch.cuda.amp import autocast
+# from torch.optim.lr_scheduler import PolynomialLR
+import cv2
+
+import transforms
+import utils
+from conf import settings
+# from dataset.voc2012 import VOC2012Aug
+from lr_scheduler import PolynomialLR, WarmUpLR, WarmUpWrapper
+from metric import eval_metrics, gland_accuracy_object_level
+from dataloader import IterLoader
+import test_aug
+from losses import DiceLoss, WeightedLossWarpper, GlandContrastLoss, TI_Loss, soft_dice_cldice
+import sampler as _sampler
+
+import numpy as np
+import skimage.morphology as morph
+from skimage import measure
+from scipy.spatial.distance import directed_hausdorff as hausdorff
+import cv2
+
+
+
 #from dataset.camvid import CamVid
 #from metrics import Metrics
 #from model import UNet
+
+def segment_level_loss(gt, pred, op='xor', out_size=(160, 160)):
+        ignore_idx = 255
+
+
+        gt = cv2.resize(gt, out_size[::-1], interpolation=cv2.INTER_NEAREST)
+        pred = cv2.resize(pred, out_size[::-1], interpolation=cv2.INTER_NEAREST)
+
+        count_over_conn = 0
+        count_under_conn = 0
+
+        count_over_conn_pred = 0
+        count_under_conn_gt = 0
+
+        count_over_conn_gt = 0
+
+        count_A = 0
+        count_B = 0
+
+
+        if op == 'none':
+            return np.zeros(gt.shape, dtype=np.uint8)
+
+
+        # remove ignore_idx
+        # pred idx only contains 0 or 1, so we need to remove the blank region acoording = gt
+        pred[gt==ignore_idx] = 0
+
+
+
+        # set connectivity to 1 and set min_size to 64 as default
+        # because some of the groud truth gland will have sawtooth effect due to the data augmentation
+        pred = morph.remove_small_objects(pred == 1, connectivity=1)
+        gt = morph.remove_small_objects(gt == 1, connectivity=1)
+
+
+
+        # set connectivity to 1 to avoid glands clustered together due to resize
+        # only counts cross connectivity
+        pred_labeled, pred_num = measure.label(pred, return_num=True, connectivity=1)
+        gt_labeled, gt_num = measure.label(gt, return_num=True, connectivity=1)
+
+
+        # iterate through prediction
+        #print(np.unique(gt), np.unique(pred))
+        results = []
+        #pred
+        res = np.zeros(gt.shape, dtype=np.uint8)
+
+        # based on pred glands
+        for i in range(0, pred_num):
+            i += 1
+
+            # gt != 0 is gt gland
+            # pred_labeled == i is the ith gland of pred
+            pred_labeled_i = pred_labeled == i
+            mask = (pred_labeled_i) & (gt != 0)
+
+            # for each pixel of mask in corresponding gt img
+            #print(gt_labeled[mask].shape[0], len(gt_labeled[mask]))
+            if len(gt_labeled[mask]) == 0:
+                # no gt gland instance in corresponding
+                # location of gt image
+
+                #res[pred_labeled == i] = 1
+                res[pred_labeled_i] = 1
+                # count_under_conn_pred += 1
+
+                continue
+
+            # one pred gland contains more than one gt glands
+            if gt_labeled[mask].min() != gt_labeled[mask].max():
+                # more than 1 gt gland instances in corresponding
+                # gt image
+                #res[pred_labeled == i] = 1
+                res[pred_labeled_i] = 1
+
+                # count_under_conn_pred += 1
+
+                #print(len(np.unique(gt_labeled[mask])) - 1, np.unique(gt_labeled[mask]))
+
+                count_under_conn_gt += len(np.unique(gt_labeled[mask])) - 1
+
+            else:
+                # corresponding gt gland area is less than 50%
+                if mask.sum() / pred_labeled_i.sum() < 0.5:
+                    #res[pred_labeled == i] = 1
+                    res[pred_labeled_i] = 1
+                    # count_under_conn_pred += 1
+                    #pred_labeled_i_xor = np.logical_xor(pred_labeled_i, mask)
+                    #res[pred_labeled_i_xor] = 1
+
+
+        # vis
+        ###################################################
+        # cv2.imwrite('my_mutal_alg/pred_region_wrong_number.png', res * 255)
+        ###################################################
+
+        #gt
+        results.append(res)
+
+        res = np.zeros(gt.shape, dtype=np.uint8)
+        for i in range(0, gt_num):
+            i += 1
+            gt_labeled_i = gt_labeled == i
+            #mask = (gt_labeled == i) & (pred != 0)
+            mask = gt_labeled_i & (pred != 0)
+
+            if len(pred_labeled[mask]) == 0:
+                # no pred gland instance in corresponding
+                # predicted image
+
+                #res[gt_labeled == i] = 1
+                res[gt_labeled_i] = 1
+                #cv2.imwrite('resG{}.png'.format(i), res)
+                # count_over_conn_pred += 1
+
+                count_over_conn_gt += 1
+                continue
+
+            if pred_labeled[mask].min() != pred_labeled[mask].max():
+                #res[gt_labeled == i] = 1
+                res[gt_labeled_i] = 1
+                #cv2.imwrite('resG{}.png'.format(i), res)
+                # count_over_conn += 1
+
+                count_over_conn_gt += 1
+
+                # count_under_conn_pred += len(np.unique(pred_labeled[mask])) - 1
+
+            else:
+                if mask.sum() / gt_labeled_i.sum() < 0.5:
+                    #print(mask.sum() / gt_labeled_i.sum(), 'ccccccccccc')
+                    #print(i, i, i, i)
+                    #res[gt_labeled == i] = 1
+                    res[gt_labeled_i] = 1
+                    # count_over_conn += 1
+
+                    count_over_conn_gt += 1
+            #print(mask.sum() / (gt_labeled == i).sum(), 'cc111')
+            #start = time.time()
+            #for i in range(100):
+            #    np.unique(test)
+            #finish = time.time()
+            #print('unique', finish - start)
+
+            #start = time.time()
+            #for i in range(100):
+            #    if len(test) == 0:
+            #        print('no')
+            #        break
+            #    test.max()
+
+            #finish = time.time()
+            #print('max min', finish - start)
+
+        # vis
+        ###################################################
+        # cv2.imwrite('my_mutal_alg/gt_region_wrong_number.png', res * 255)
+        ###################################################
+        results.append(res)
+
+
+        res = cv2.bitwise_or(results[0], results[1])
+
+        # vis
+        ###################################################
+        # cv2.imwrite('my_mutal_alg/merge_all_wrong_number_region.png', res * 255)
+        ###################################################
+        # print('predict_num', pred_num, 'under', count_under_conn, 'over', count_over_conn)
+        if op == 'or':
+            return res
+
+        elif op == 'xor':
+
+            #cc = res.copy()
+            gt_res = np.zeros(gt.shape, dtype=np.uint8)
+            for i in range(0, gt_num):
+                i += 1
+                if res[gt_labeled == i].max() != 0:
+                    gt_res[gt_labeled == i] = 1
+
+            # vis
+            ###################################################
+            # cv2.imwrite('my_mutal_alg/gt_1_final_candidate_region.png', gt_res * 255)
+            ###################################################
+            pred_res = np.zeros(gt.shape, dtype=np.uint8)
+            for i in range(0, pred_num):
+                i += 1
+                if res[pred_labeled == i].max() != 0:
+                    pred_res[pred_labeled == i] = 1
+
+            # vis
+            ###################################################
+            # cv2.imwrite('my_mutal_alg/pred_1_final_candidate_region.png', pred_res * 255)
+            ###################################################
+
+            #print(pred_res.shape, 'pred_res.shape')
+            res = cv2.bitwise_xor(pred_res, gt_res)
+
+            # vis
+            ###################################################
+            # cv2.imwrite('my_mutal_alg/final_result.png', res * 255)
+            ###################################################
+            #print(pred_num)
+            #return res
+
+        #print('hello', count_under_conn_gt, count_over_conn_gt, gt_num)
+        return {
+            'pred': pred_num,
+            'under': count_under_conn_gt,
+            'over': count_over_conn_gt,
+            'gt': gt_num,
+        }
+
+def connect(net, val_dataloader, args, val_set):
+    count_A = 0
+    count_B = 0
+    total = 0
+    # def evaluate(net, val_dataloader, args, val_set):
+
+    pred_num = 0
+    over_num = 0
+    under_num = 0
+    gt_num = 0
+
+    with torch.no_grad():
+        #for img_metas in tqdm(val_dataloader):
+        print(val_dataloader)
+        for img_metas in val_dataloader:
+            for img_meta in img_metas:
+
+
+
+                imgs = img_meta['imgs']
+                gt_seg_map = img_meta['seg_map']
+                ori_shape = gt_seg_map.shape[:2]
+
+
+                pred, seg_logit = test_aug.aug_test(
+                    imgs=imgs,
+                    flip_direction=img_meta['flip'],
+                    ori_shape=ori_shape,
+                    model=net,
+
+                    mode='whole',
+                    crop_size=None,
+                    stride=None,
+
+                    # rescale=True,
+                    rescale=False,
+
+                    #mode='slide',
+                    #stride=(256, 256),
+                    ## crop_size=(480, 480),
+                    ## crop_size=(416, 416),
+                    #crop_size=settings.CROP_SIZE_GLAS if args.dataset=='Glas' else settings.CROP_SIZE_CRAG,
+                    #num_classes=valid_dataset.class_num
+                    num_classes=val_dataloader.dataset.class_num
+                )
+
+                pred = pred == 1
+
+                pred = morph.remove_small_objects(pred, 100 * 8 + 50)
+
+
+
+                pred[pred > 1] = 0
+
+                h, w = gt_seg_map.shape
+                pred = cv2.resize(pred.astype('uint8'), (w, h), interpolation=cv2.INTER_NEAREST)
+
+                return pred
+
+                # print(np.unique(pred))
+                # cv2.imwrite('test.png', pred * 255)
+                # import sys; sys.exit()
+
+                img_name = img_meta['img_name']
+
+                # contrasive_loss_fn.segment_level_loss(gt, pred, op='xor', out_size=ori_shape):
+                #segment_level_loss(gt, pred, op='xor', out_size=ori_shape)
+                # print(gt_seg_map.dtype)
+                out = segment_level_loss(gt_seg_map, pred, op='xor', out_size=ori_shape)
+                # print(out)
+                pred_num += out['pred']
+                under_num += out['under']
+                over_num += out['over']
+                gt_num += out['gt']
+
+
+
+
+
+
+
+                # res = np.array([F1, dice, haus])
+
+
+                # count += 1
+                # total += res
+
+
+                if args.dataset == 'Glas':
+                    if 'testA' in img_name:
+                        count_A += 1
+                        # testA += res
+
+                    if 'testB' in img_name:
+                        count_B += 1
+                        # testB += res
+
+    out = {}
+
+    # total = total / count
+    # out['total'] = total
+
+
+
+    if args.dataset == 'Glas':
+        #total = (testA + testB) / (count_A + count_B)
+        # print(pred_num, under_num, over_num)
+        # print(type(pred))
+        #print(under_num / pred_num, over_num / pred_num)
+        print('under_num', under_num, 'over_num', over_num, 'gt_num', gt_num, 'under ratio', under_num / gt_num, 'over ratio', over_num / gt_num)
+
+        # if val_set == 'testA':
+            # testA = testA / count_A
+            # testA = out['pred']
+            # out['testA'] = testA
+            # assert count == count_A
+
+        # if val_set == 'testB':
+            # testB = testB / count_B
+            # out['testB'] = testB
+            # testA = out['over']
+            # assert count == count_B
+
+        # if val_set == 'val':
+            # testB = out['under']
+            # testA = testA / count_A
+            # testB = testB / count_B
+            # out['testA'] = testA
+            # out['testB'] = testB
+
+
+    if args.dataset == 'crag':
+    #    total = crag_res / count
+    #    testA = 0.1
+    #    testB = 0.1
+        # print(under_num / pred_num, over_num / pred_num)
+        print('under_num', under_num, 'over_num', over_num, 'gt_num', gt_num, 'under ratio', under_num / gt_num, 'over ratio', over_num / gt_num)
+
+    #return total, testA, testB
+    return out
 
 
 def gen_trans(combo):
@@ -74,6 +474,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
 
+    # contrasive_loss_fn = GlandContrastLoss(4, ignore_idx=train_dataloader.dataset.ignore_index, temperature=0.07)
     #m = re.search(r'[a-zA-Z]+_[0-9]+_[a-zA-z]+_[0-9]+h_[0-9]+m_[0-9]s','Thursday_21_January_2021_09h_24m_07s')
     #m = re.search(r'[a-zA-Z]+_[0-9]+_[a-zA-Z]+_[0-9]+h_[0-9]+m','Thursday_21_January_2021_09h_24m_07s')
     #print(m.group())
@@ -87,6 +488,8 @@ if __name__ == '__main__':
     test_dataset = test_dataloader.dataset
     # print(test_dataset)
     # print(test_dataset.transforms)
+    #print(test_dataset.class_num)
+    #import sys; sys.exit()
     net = utils.get_model(args.net, 3, test_dataset.class_num, args=args)
     net.load_state_dict(torch.load(args.weight))
     net = net.cuda()
@@ -95,6 +498,7 @@ if __name__ == '__main__':
     #print('Glas testA')
 
 
+    #augs = ['h', 'v', 'hv', 'r90', 'r90h', 'r90v', 'r90hv', 'none']
     augs = ['h', 'v', 'hv', 'r90', 'r90h', 'r90v', 'r90hv', 'none']
     from itertools import combinations
     count = 0
@@ -121,6 +525,7 @@ if __name__ == '__main__':
     #     # print(i)
         for combo in list(combinations(augs, i)):
             count += 1
+            print(combo)
 
     #         # test_dataset.transforms.flip_direction = combo
 
@@ -146,189 +551,61 @@ if __name__ == '__main__':
                 dataset, batch_size=4, num_workers=4, shuffle=False, pin_memory=True, persistent_workers=True,
                 collate_fn=multiscale_collate)
 
-            print(len(test_dataloader))
+            # print(len(test_dataloader))
 
             # print(combo1,  test_dataloader.dataset.transforms.flip_direction, id(test_dataloader.dataset.transforms.flip_direction))
             with torch.no_grad():
-                    results = evaluate(net, test_dataloader, args, val_set)
-                    print('test dataset transforms is: ', test_dataloader.dataset.transforms)
-                    for key, values in results.items():
-                        print('{}: F1 {}, Dice:{}, Haus:{}'.format(key, *values))
-                    # print(id(test_dataloader.dataset))
+                    ##################################3
+                    #results = evaluate(net, test_dataloader, args, val_set)
+                    ##print('results.tiems', results)
+                    #print('test dataset transforms is: ', test_dataloader.dataset.transforms)
+                    #for key, values in results.items():
+                    #    print('{}: F1 {}, Dice:{}, Haus:{}'.format(key, *values))
+                    ##################################3
+                    # print(id(test_dataloader))
+                    pred = connect(net, test_dataloader, args, val_set)
 
-                    #for img_metas in test_dataloader:
-                    ##     #print(len(img_meta))
-                    #     for img_meta in img_metas:
-                    #         print(img_meta['flip'], img_meta['img_name'], id(test_dataloader.dataset.transforms.flip_direction))
-                    ##         pass
-
-
-            # if count == 3:
-            #     import sys; sys.exit()
-
-
-
-
-
-
-            #utils.test(
-            #    net,
-            #    test_dataloader,
-            #    settings.IMAGE_SIZE,
-            #    settings.SCALES,
-            #    settings.BASE_SIZE,
-            #    test_dataset.class_num,
-            #    settings.MEAN,
-            #    settings.STD,
-            #    checkpoint
-            #)
-
-        #test_dataloader = utils.data_loader(args, 'testB')
-        #test_dataset = test_dataloader.dataset
-        #print('Glas testB')
-        #with torch.no_grad():
-        #    results = evaluate(net, test_dataloader, args)
-        #    for key, values in results.items():
-        #        print('{}: F1 {}, Dice:{}, Haus:{}'.format(key, *values))
-            #utils.test(
-            #    net,
-            #    test_dataloader,
-            #    settings.IMAGE_SIZE,
-            #    settings.SCALES,
-            #    settings.BASE_SIZE,
-            #    test_dataset.class_num,
-            #    settings.MEAN,
-            #    settings.STD,
-            #    checkpoint
-            #)
-
-        #utils.test(
-        #    net,
-        #    test_dataloader,
-        #    settings.IMAGE_SIZE,
-        #    [1],
-        #    settings.BASE_SIZE,
-        #    test_dataset.class_num,
-        #    settings.MEAN,
-        #    settings.STD
-        #)
-
-#    import random
-#    random.seed(42)
-#    val_dataloader = utils.data_loader(args, 'val')
-#    val_dataset = val_dataloader.dataset
-#    cls_names = val_dataset.class_names
-#    ig_idx = val_dataset.ignore_index
-#    iou = 0
-#    all_acc = 0
-#    acc = 0
 #
-#    ioud = 0
-#    all_accd = 0
-#    accd = 0
-#    with torch.no_grad():
-#        for img, label in val_dataloader:
-#            img = img.cuda()
-#            b = img.shape[0]
-#            label = label.cuda()
-#            pred = net(img)
-#            pred = pred.argmax(dim=1)
+#total: F1 0.8328158261132039, Dice:0.8954908049063768, Haus:108.60207262579972
+#<torch.utils.data.dataloader.DataLoader object at 0x7fc3b765b700>
+#0.1519434628975265 0.0636042402826855
 #
-#            tmp_all_acc, tmp_acc, tmp_iou = eval_metrics(
-#                    pred.detach().cpu().numpy(),
-#                    label.detach().cpu().numpy(),
-#                    len(cls_names),
-#                    ignore_index=ig_idx,
-#                    metrics='mIoU',
-#                    nan_to_num=-1
-#            )
-#            tmp_all_accd, tmp_accd, tmp_ioud = dd.eval_metrics(
-#                label.detach(),
-#                pred.detach(),
-#                len(cls_names)
-#            )
+#total: F1 0.846402819873217, Dice:0.8983382251526733, Haus:106.11144328631421
+#<torch.utils.data.dataloader.DataLoader object at 0x7fc3b7711810>
+#0.14462081128747795 0.06701940035273368
 #
+#total: F1 0.8492221900870847, Dice:0.8993064472884781, Haus:100.35744541849944
+#<torch.utils.data.dataloader.DataLoader object at 0x7fc3bbabff10>
+#0.14938488576449913 0.05975395430579965
 #
-#            all_acc += tmp_all_acc * b
-#            acc += tmp_acc * b
-#            iou += tmp_iou * b
+#total: F1 0.8393460905241366, Dice:0.8908754570916887, Haus:140.4478331309946
+#<torch.utils.data.dataloader.DataLoader object at 0x7fc3b7711810>
+#0.15752212389380532 0.07079646017699115
 #
-#            all_accd += tmp_all_accd * b
-#            accd += tmp_accd * b
-#            ioud += tmp_ioud * b
+#total: F1 0.8434747060625817, Dice:0.8894970964422366, Haus:136.7822589361515
+#<torch.utils.data.dataloader.DataLoader object at 0x7fc3b5f4b310>
+#0.15061295971978983 0.08056042031523643
 #
-#        all_acc /= len(val_dataloader.dataset)
-#        acc /= len(val_dataloader.dataset)
-#        iou /= len(val_dataloader.dataset)
-
-        #print('Iou for each class:')
-        #utils.print_eval(cls_names, iou)
-        #print('Acc for each class:')
-        #utils.print_eval(cls_names, acc)
-        #miou = sum(iou) / len(iou)
-        #macc = sum(acc) / len(acc)
-        #print('Mean acc {:.4f} Mean iou {:.4f}  All Pixel Acc {:.4f}'.format(macc, miou, all_acc))
-    #valid_transforms = transforms.Compose([
-    #    transforms.Resize(settings.IMAGE_SIZE),
-    #    transforms.ToTensor(),
-    #    transforms.Normalize(settings.MEAN, settings.STD)
-    #])
-        #all_accd /= len(val_dataloader.dataset)
-        #accd /= len(val_dataloader.dataset)
-        #ioud /= len(val_dataloader.dataset)
-
-        #print(accd)
-        #print(ioud)
-        #print(all_accd)
-
-    #valid_dataset = CamVid(
-    #    settings.DATA_PATH,
-    #    'val',
-    #    valid_transforms
-    #)
-
-    #valid_loader = torch.utils.data.DataLoader(
-    #    valid_dataset, batch_size=args.b, num_workers=4)
-
-    #metrics = Metrics(valid_dataset.class_num, valid_dataset.ignore_index)
-
-    #loss_fn = nn.CrossEntropyLoss()
-
-    #net = UNet(3, valid_dataset.class_num)
-    #net.load_state_dict(torch.load(args.weight))
-    #net = net.cuda()
-
-    #net.eval()
-    #test_loss = 0
-    #with torch.no_grad():
-    #    for batch_idx, (images, masks) in enumerate(valid_loader):
-
-    #        images = images.cuda()
-    #        masks = masks.cuda()
-
-    #        preds = net(images)
-
-    #        loss = loss_fn(preds, masks)
-    #        test_loss += loss.item()
-
-    #        preds = preds.argmax(dim=1)
-    #        preds = preds.view(-1).cpu().data.numpy()
-    #        masks = masks.view(-1).cpu().data.numpy()
-    #        metrics.add(preds, masks)
-
-    #        print('iteration: {}, loss: {:.4f}'.format(batch_idx, loss))
-
-    #test_loss = test_loss / len(valid_loader)
-    #miou = metrics.iou()
-    #precision = metrics.precision()
-    #recall = metrics.recall()
-    #metrics.clear()
-
-
-    #print(('miou: {miou:.4f}, precision: {precision:.4f}, '
-    #       'recall: {recall:.4f}, average loss: {loss:.4f}').format(
-    #    miou=miou,
-    #    precision=precision,
-    #    recall=recall,
-    #    loss=test_loss
-    #))
+#total: F1 0.8361946475798538, Dice:0.8918918202230157, Haus:105.67535797915896
+#<torch.utils.data.dataloader.DataLoader object at 0x7fc3b7711810>
+#0.15 0.06206896551724138
+#
+#total: F1 0.8436962950963485, Dice:0.895920530711632, Haus:131.54596573750746
+#<torch.utils.data.dataloader.DataLoader object at 0x7fc3bbb0c070>
+#0.164021164021164 0.06701940035273368
+#
+#total: F1 0.8346056740882929, Dice:0.8922671210304383, Haus:104.04074575008444
+#<torch.utils.data.dataloader.DataLoader object at 0x7fc3b7711810>
+#0.15520282186948853 0.07583774250440917
+#
+#total: F1 0.8414675578201598, Dice:0.8967951704346063, Haus:104.01194782467448
+#<torch.utils.data.dataloader.DataLoader object at 0x7fc3b5f4b310>
+#0.14485165794066318 0.06806282722513089
+#
+#total: F1 0.8404228090917742, Dice:0.8979035937560809, Haus:96.51755084255852
+#<torch.utils.data.dataloader.DataLoader object at 0x7fc3b5d7f970>
+#0.1480836236933798 0.06794425087108014
+#
+#total: F1 0.841013931190032, Dice:0.8886137471990633, Haus:150.47503130505726
+#<torch.utils.data.dataloader.DataLoader object at 0x7fc3b5f4b310>
+#0.14964788732394366 0.0721830985915493
