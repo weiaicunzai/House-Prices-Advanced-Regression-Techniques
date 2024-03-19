@@ -154,7 +154,7 @@ test_tgt_corrected
 test_tgt_pretrain_cropped
 testetsetestset
 color.py
-dataset/crop_pretraining.py
+# dataset/crop_pretraining.py
 draw.sh
 draw_gnn_vis.py
 fig1.py
