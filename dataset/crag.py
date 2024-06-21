@@ -81,7 +81,6 @@ class CRAG(Dataset):
             # if image_set == 'train':
 
 
-            print(count)
             if image_set in ['train', 'all']:
                 self.weight_maps.append(
                     cv2.imread(weightmap_filename, -1))
