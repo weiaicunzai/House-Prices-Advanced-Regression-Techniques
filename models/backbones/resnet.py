@@ -1,7 +1,7 @@
 from itertools import repeat
 import collections.abc
 from functools import partial
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Type
 from copy import deepcopy
 import os
 
@@ -116,6 +116,112 @@ def drop_block_fast_2d(
 #        # NOTE: it's expected the first (positional) argument of all attention layers is the # input channels
 #        return module_cls(channels, **kwargs)
 #    return None
+
+# def create_attn(attn_type, channels, **kwargs):
+#     print(attn_type)
+#     module_cls = get_attn(attn_type)
+#     if module_cls is not None:
+#         # NOTE: it's expected the first (positional) argument of all attention layers is the # input channels
+#         return module_cls(channels, **kwargs)
+#     return None
+
+class BasicBlock(nn.Module):
+    expansion = 1
+
+    def __init__(
+            self,
+            inplanes: int,
+            planes: int,
+            stride: int = 1,
+            downsample: Optional[nn.Module] = None,
+            cardinality: int = 1,
+            base_width: int = 64,
+            reduce_first: int = 1,
+            dilation: int = 1,
+            first_dilation: Optional[int] = None,
+            act_layer: Type[nn.Module] = nn.ReLU,
+            norm_layer: Type[nn.Module] = nn.BatchNorm2d,
+            attn_layer: Optional[Type[nn.Module]] = None,
+            aa_layer: Optional[Type[nn.Module]] = None,
+            drop_block: Optional[Type[nn.Module]] = None,
+            drop_path: Optional[nn.Module] = None,
+    ):
+        """
+        Args:
+            inplanes: Input channel dimensionality.
+            planes: Used to determine output channel dimensionalities.
+            stride: Stride used in convolution layers.
+            downsample: Optional downsample layer for residual path.
+            cardinality: Number of convolution groups.
+            base_width: Base width used to determine output channel dimensionality.
+            reduce_first: Reduction factor for first convolution output width of residual blocks.
+            dilation: Dilation rate for convolution layers.
+            first_dilation: Dilation rate for first convolution layer.
+            act_layer: Activation layer.
+            norm_layer: Normalization layer.
+            attn_layer: Attention layer.
+            aa_layer: Anti-aliasing layer.
+            drop_block: Class for DropBlock layer.
+            drop_path: Optional DropPath layer.
+        """
+        super(BasicBlock, self).__init__()
+
+        assert cardinality == 1, 'BasicBlock only supports cardinality of 1'
+        assert base_width == 64, 'BasicBlock does not support changing base width'
+        first_planes = planes // reduce_first
+        outplanes = planes * self.expansion
+        first_dilation = first_dilation or dilation
+        use_aa = aa_layer is not None and (stride == 2 or first_dilation != dilation)
+
+        self.conv1 = nn.Conv2d(
+            inplanes, first_planes, kernel_size=3, stride=1 if use_aa else stride, padding=first_dilation,
+            dilation=first_dilation, bias=False)
+        self.bn1 = norm_layer(first_planes)
+        self.drop_block = drop_block() if drop_block is not None else nn.Identity()
+        self.act1 = act_layer(inplace=True)
+        self.aa = create_aa(aa_layer, channels=first_planes, stride=stride, enable=use_aa)
+
+        self.conv2 = nn.Conv2d(
+            first_planes, outplanes, kernel_size=3, padding=dilation, dilation=dilation, bias=False)
+        self.bn2 = norm_layer(outplanes)
+
+        # self.se = create_attn(attn_layer, outplanes)
+        self.se = None
+
+        self.act2 = act_layer(inplace=True)
+        self.downsample = downsample
+        self.stride = stride
+        self.dilation = dilation
+        self.drop_path = drop_path
+
+    def zero_init_last(self):
+        if getattr(self.bn2, 'weight', None) is not None:
+            nn.init.zeros_(self.bn2.weight)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        shortcut = x
+
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.drop_block(x)
+        x = self.act1(x)
+        x = self.aa(x)
+
+        x = self.conv2(x)
+        x = self.bn2(x)
+
+        if self.se is not None:
+            x = self.se(x)
+
+        if self.drop_path is not None:
+            x = self.drop_path(x)
+
+        if self.downsample is not None:
+            shortcut = self.downsample(shortcut)
+        x += shortcut
+        x = self.act2(x)
+
+        return x
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -1141,7 +1247,22 @@ def build_model_with_cfg(
 def _create_resnet(pretrained=False, pretrained_cfg=None, num_classes=1000,  **kwargs):
     return build_model_with_cfg(model_cls=ResNet, pretrained=pretrained, pretrained_cfg=pretrained_cfg, num_classes=num_classes, **kwargs)
 
-#def resnet50d(pretrained=)
+
+def resnet18d(pretrained=True, num_classes=1000, **kwargs):
+    """Constructs a ResNet-34-D model.
+    """
+    # model_args = dict(block=BasicBlock, layers=(3, 4, 6, 3), stem_width=32, stem_type='deep', avg_down=True)
+    model_args = dict(block=BasicBlock, layers=(2, 2, 2, 2), stem_width=32, stem_type='deep', avg_down=True)
+    # return _create_resnet(pretrained='resnet34d', pretrained_cfg=default_cfgs['resnet34d'], **dict(model_args, **kwargs))
+    # return _create_resnet(pretrained=pretrained, pretrained_cfg=default_cfgs['resnet34d'], num_classes=num_classes, **model_args)
+    return _create_resnet(pretrained=pretrained, pretrained_cfg=default_cfgs['resnet18d'], num_classes=num_classes, **model_args)
+
+def resnet34d(pretrained=True, num_classes=1000, **kwargs):
+    """Constructs a ResNet-34-D model.
+    """
+    model_args = dict(block=BasicBlock, layers=(3, 4, 6, 3), stem_width=32, stem_type='deep', avg_down=True)
+    # return _create_resnet(pretrained='resnet34d', pretrained_cfg=default_cfgs['resnet34d'], **dict(model_args, **kwargs))
+    return _create_resnet(pretrained=pretrained, pretrained_cfg=default_cfgs['resnet34d'], num_classes=num_classes, **model_args)
 
 #def resnet50d(pretrained=False, **kwargs):
 def resnet50d(pretrained=True, num_classes=1000, **kwargs):

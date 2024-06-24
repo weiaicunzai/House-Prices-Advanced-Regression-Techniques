@@ -407,37 +407,47 @@ class TG(nn.Module):
         self.backbone = backbone
         #self.graph_head_dim = 512
         #self.graph_head_dim = 256
-        self.graph_head_dim = 256
+        self.hidden_dim = 64
+        # self.hidden_dim = 128
+        # self.graph_head_dim = 256
 
         self.project = nn.Sequential(
-            nn.Conv2d(256, 48, 1, bias=False),
+            # nn.Conv2d(256, 48, 1, bias=False),
+            # nn.Conv2d(self.hidden_dim, 48, 1, bias=False),
+            nn.Conv2d(self.hidden_dim, 48, 1, bias=False),
             nn.BatchNorm2d(48),
             nn.ReLU(inplace=True),
         )
 
         self.classifier = nn.Sequential(
-            nn.Conv2d(self.graph_head_dim + 48, 256, 3, padding=1, bias=False),
+            # nn.Conv2d(self.graph_head_dim + 48, 256, 3, padding=1, bias=False),
+            nn.Conv2d(self.hidden_dim + 48, self.hidden_dim, 3, padding=1, bias=False),
             #nn.Conv2d(256, 256, 3, padding=1, bias=False),
-            nn.BatchNorm2d(256),
+            nn.BatchNorm2d(self.hidden_dim),
             nn.ReLU(inplace=True),
-            nn.Conv2d(256, num_classes, 1)
+            nn.Conv2d(self.hidden_dim, num_classes, 1)
         )
 
         #q_len = 5000
         q_len = 1000
         #q_len = 2500
-        q_dim = 256
+        # q_dim = 256
+        q_dim = self.hidden_dim
         self.register_buffer("queue", torch.randn(num_classes, q_len, q_dim))
-        #self.register_buffer("queue", torch.randn(num_classes, q_len, 2))
+        # self.register_buffer("queue", torch.randn(num_classes, q_len, 2))
         self.queue = nn.functional.normalize(self.queue, p=2, dim=2)
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
 
         self.fcs =  nn.ModuleList(
             [
-                BasicLinear(256, 256),
-                BasicLinear(512, 256),
-                BasicLinear(1024, 256),
-                BasicLinear(2048, 256),
+                #BasicLinear(256, 256),
+                #BasicLinear(512, 256),
+                #BasicLinear(1024, 256),
+                #BasicLinear(2048, 256),
+                BasicLinear(self.hidden_dim, self.hidden_dim),
+                BasicLinear(self.hidden_dim * 2,  self.hidden_dim),
+                BasicLinear(self.hidden_dim * 4,  self.hidden_dim),
+                BasicLinear(self.hidden_dim * 8,  self.hidden_dim),
                 # BasicLinear(256, 256),
             ]
         )
@@ -483,21 +493,26 @@ class TG(nn.Module):
 
         self.gland_head_project = nn.Sequential(
             BasicConv2d(
-                in_channels=2048,
+                # in_channels=2048,
+                in_channels=self.hidden_dim * 8,
                 #out_channels=512,
-                out_channels=self.graph_head_dim,
+                # out_channels=self.graph_head_dim,
+                out_channels=self.hidden_dim,
                 kernel_size=1
             )
         )
-        self.gland_head = GraphHead(dim=self.graph_head_dim)
+        # self.gland_head = GraphHead(dim=self.graph_head_dim)
 
         self.aux_head = nn.Sequential(
             BasicConv2d(
-                in_channels=1024,
-                out_channels=512,
+                #in_channels=1024,
+                #out_channels=512,
+                in_channels=self.hidden_dim * 4,
+                out_channels=self.hidden_dim * 2,
                 kernel_size=1
             ),
-            BasicConv2d(512, num_classes, 1)
+            # BasicConv2d(512, num_classes, 1)
+            BasicConv2d(self.hidden_dim * 2, num_classes, 1)
         )
         #self.aux_head = BasicConv2d(
         #    BasicConv2d(1024, 512),
@@ -515,7 +530,9 @@ class TG(nn.Module):
         low_level_feat = self.project(feats['low_level']) #  120x120
 
         gland_feats = self.gland_head_project(feats['out']) # 60x60
-        gland = self.gland_head(gland_feats, queue=self.queue.detach(), hook=hook) # layer 4
+        # gland = self.gland_head(gland_feats, queue=self.queue.detach(), hook=hook) # layer 4
+        # print(gland_feats.shape, gland.shape)
+        gland = gland_feats
 
 
         gland = F.interpolate(
@@ -594,7 +611,9 @@ class TG(nn.Module):
 
 
 def tg(num_classes):
-    backbone = resnet.resnet50d()
+    # backbone = resnet.resnet50d()
+    backbone = resnet.resnet34d()
+    # backbone = resnet.resnet18d()
     backbone.fc = nn.Identity()
     backbone.global_pool = nn.Identity()
     #print(backbone)

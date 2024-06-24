@@ -959,6 +959,10 @@ if __name__ == '__main__':
 
     net = utils.get_model(args.net, 3, train_dataset.class_num, args=args)
     #net.load_state_dict(torch.load('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Monday_16_January_2023_05h_11m_49s/iter_39999.pt'))
+    # print(sum([p.numel() for p in net.parameters()]))
+    # for name, p in net.named_parameters():
+        # print(name, p.numel())
+    # import sys; sys.exit()
 
 
     if args.resume:
