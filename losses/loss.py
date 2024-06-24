@@ -319,7 +319,7 @@ class GlandContrastLoss(nn.Module):
         #print((t2 - t1) / bs)
         self.total_time += (t2 - t1)
         self.total_samples += bs
-        print('avg time:', self.total_time / self.total_samples)
+        # print('avg time:', self.total_time / self.total_samples)
         #import sys; sys.exit()
         res = np.stack(res, axis=0)
         return res
@@ -787,11 +787,9 @@ class GlandContrastLoss(nn.Module):
 
         #print(object_hard_mask)
         object_hard_mask[weight_mask] = gt_mask[weight_mask].float()
-        #print(object_hard_mask, '.....')
 
         ignore_mask = gt_seg == self.ignore_idx
 
-        #weight = object_hard_mask * ignore_mask
         object_hard_mask[ignore_mask] = 0
 
         return object_hard_mask
@@ -851,7 +849,11 @@ class GlandContrastLoss(nn.Module):
 
         # sample accordint to weights
         gland_indices = torch.multinomial(gland_weight.view(batch_size, -1), self.num_nagative, replacement=False)
-        bg_indices = torch.multinomial(bg_weight.view(batch_size, -1), self.num_nagative, replacement=False)
+        try:
+           bg_indices = torch.multinomial(bg_weight.view(batch_size, -1), self.num_nagative, replacement=False)
+        except:
+            print('except...........')
+            bg_indices = torch.zeros(batch_size, self.num_nagative, device=gland_indices.device)
 
 
         # convert indices to points
