@@ -2,7 +2,7 @@
 import warnings
 
 from torch.optim.lr_scheduler import _LRScheduler
-
+#通过多项式衰减公式调整学习率，使学习率逐渐减小，直到达到最小学习率
 class PolynomialLR(_LRScheduler):
 
     def __init__(self, optimizer, total_iters=5, power=1.0, min_lr=0.0, last_epoch=-1, verbose=False):

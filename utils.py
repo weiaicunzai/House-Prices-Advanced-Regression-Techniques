@@ -65,7 +65,7 @@ def visualize_param_hist(writer, net, n_iter):
         layer, attr = os.path.splitext(name)
         attr = attr[1:]
         #writer.add_histogram("{}/{}".format(layer, attr), param.detach().cpu().numpy(), n_iter)
-        writer.add_histogram("{}/{}".format(layer, attr), param, n_iter)
+        # writer.add_histogram("{}/{}".format(layer, attr), param, n_iter)
 
 def compute_mean_and_std(dataset):
     """Compute dataset mean and std, and normalize it
@@ -435,7 +435,7 @@ def data_loader(args, image_set):
             res.append(img_meta)
 
         return res
-
+#默认是false的
     if args.pretrain:
 
         dataset = CropPretraining(
@@ -482,9 +482,11 @@ def data_loader(args, image_set):
 
     elif args.dataset == 'Glas':
         dataset = Glas(
-            'data',
+            #这里传入的内容，只能到data，因为data下面好几个文件夹，都会被用到
+            '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data',
             image_set=image_set,
-            download=args.download
+            # download=args.download
+            download=False
         )
 
     elif args.dataset == 'Voc2012':
@@ -673,8 +675,8 @@ def data_loader(args, image_set):
         raise ValueError('image_set should be one of "train", "val", \
                 instead got "{}"'.format(image_set))
 
-    print('transforms:')
-    print(trans)
+    # print('transforms:')
+    # print(trans)
     print()
     dataset.transforms = trans
 
@@ -968,7 +970,11 @@ def test(net, test_dataloader, crop_size, scales, base_size, classes, mean, std,
     #print('All acc {:.2f}%'.format(all_acc))
 
 
+# 主要用于 管理模型训练过程中的检查点（checkpoint）文件。通过该类，用户可以：
 
+# 定期保存模型的检查点文件。
+# 根据指定的性能指标（metrics）保存当前最佳检查点。
+# 自动删除多余的旧检查点，保证存储空间的合理利用。
 class CheckPointManager:
     def __init__(self, save_path, max_keep_ckpts=5):
 
@@ -1101,6 +1107,7 @@ def on_load_checkpoint(model_state_dict, pretrained_state_dict):
 
     new_state_dict = OrderedDict()
     for model_key in model_state_dict.keys():
+        # print("on_load_checkpoint:",model_key)
         model_tensor = model_state_dict[model_key]
 
         if model_key in pretrained_state_dict.keys():
@@ -1119,7 +1126,7 @@ def on_load_checkpoint(model_state_dict, pretrained_state_dict):
             new_state_dict[model_key] = model_tensor
 
         #pretrain_tensor = pretrained_state_dict[pretrain_key]
-
+    # exit()
     return new_state_dict
     #for model_key, pretrain_key, in zip(model_state_dict.keys(), pretrained_state_dict.keys()):
     #    #print(key1, key2)

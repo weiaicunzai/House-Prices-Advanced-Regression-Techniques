@@ -63,10 +63,12 @@ export CUDA_VISIBLE_DEVICES=2
 #python eval.py -net  tgt -weight  /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Wednesday_05_April_2023_16h_13m_58s/best_total_F1_0.9050_iter_25999.pt  -b 1 -dataset Glas
 #python eval.py -net  tgt -weight  /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Sunday_16_April_2023_13h_54m_07s/best_testA_F1_0.9289_iter_5999.pt  -b 1 -dataset Glas
 #python eval.py -net  tgt -weight  /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Sunday_16_April_2023_13h_54m_07s/best_testA_F1_0.9289_iter_5999.pt  -b 1 -dataset Glas
-
+eval "$(/home/baiyu/miniconda3/condabin/conda shell.bash hook)"
+which conda
+conda activate torch1.13
 
 # crag
-python eval.py -net  tgt -weight  /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Thursday_20_April_2023_02h_17m_48s/best_total_F1_0.8587_iter_34799.pt  -b 1 -dataset crag
+python eval.py -net  tgt -weight  /home/xuxinan/mmCode2/checkpoints/unet_branch_SGD_473_Wednesday_11_December_2024_13h_27m_38s/best_total_F1_0.9052_iter_21499.pt  -b 1 -dataset Glas
 
 # 0.905+ 39999weight
 #python eval.py -net  tgt -weight  /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/unet_branch_SGD_473_Wednesday_05_April_2023_16h_13m_58s/iter_39999.pt  -b 1 -dataset Glas

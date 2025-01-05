@@ -11,7 +11,7 @@ import skimage.morphology as morph
 from skimage import measure
 import numpy as np
 import cv2
-
+import unet3
 import time
 
 def connected_components(image: torch.Tensor, num_iterations: int = 100) -> torch.Tensor:
@@ -60,12 +60,28 @@ def connected_components(image: torch.Tensor, num_iterations: int = 100) -> torc
 
         return out.view_as(image)
 #
+
+import time
+from functools import wraps
+
+def time_execution(func):
+    @wraps(func)
+    def wrapper(self, args, kwargs):
+        t1 = time.time()
+        func(self, *args, **kwargs)
+        t2 = time.time()
+        print(t2 - t1)
+    return wrapper
+
 class GlandContrastLoss(nn.Module):
-    def __init__(self, num_nagative, temperature=0.07, ignore_idx=255):
+    def __init__(self, num_nagative, rate=30,temperature=0.07, ignore_idx=255):
         super().__init__()
+        print("GlandContrastLoss",num_nagative)
         #self.grid_size = grid_size
         self.num_nagative = num_nagative
         self.op = 'xor'
+        self.rate = rate
+        print(f'rate:{rate}')
         self.temperature = temperature
         self.base_temperature = 0.1
         #self.infonce_loss_fn = losses.NTXentLoss(temperature=0.07)
@@ -77,12 +93,18 @@ class GlandContrastLoss(nn.Module):
         self.total_time = 0
         self.total_samples = 0
 
+    # @time_execution
     def segment_level_loss(self, gt, pred, op='xor', out_size=(160, 160)):
+        # print('????????')
         # assert out_size[0] == out_size[1]
-
+        
         # h, w = out_size
 
-
+        # print("gt")
+        # print(gt.shape)
+        # print("pred")
+        # print(pred.shape)
+        # exit(1)
         gt = cv2.resize(gt, out_size[::-1], interpolation=cv2.INTER_NEAREST)
         pred = cv2.resize(pred, out_size[::-1], interpolation=cv2.INTER_NEAREST)
 
@@ -96,7 +118,33 @@ class GlandContrastLoss(nn.Module):
 
         # remove ignore_idx
         # pred idx only contains 0 or 1, so we need to remove the blank region acoording = gt
+        # print("ignore_idx")
+        # print(self.ignore_idx)
+        # print(gt.shape)
+        # print(pred.shape)
+        # print(gt==self.ignore_idx)
+        # exit(1)
+        # with open('feats_output——xxn_pred_old.txt', 'w') as f:
+        #     # 如果 feats 是一个列表或包含较复杂数据结构，你可以遍历并写入
+        #     for row in pred:
+        #         line = " ".join(map(str, row))
+        #         f.write(line + "\n")
+        # with open('feats_output——xxn_gt.txt', 'w') as f:
+        #     # 如果 feats 是一个列表或包含较复杂数据结构，你可以遍历并写入
+        #     for row in gt:
+        #         line = " ".join(map(str, row))
+        #         f.write(line + "\n")   
+        # print(type(gt))
+        # exit(1)
         pred[gt==self.ignore_idx] = 0
+        # print("pred[gt==self.ignore_idx]")
+        # print(pred)
+        # with open('feats_output——xxn_pred_new.txt', 'w') as f:
+        #     # 如果 feats 是一个列表或包含较复杂数据结构，你可以遍历并写入
+        #     for row in pred:
+        #         line = " ".join(map(str, row))
+        #         f.write(line + "\n")
+        # exit(1)
 
 
 
@@ -111,8 +159,19 @@ class GlandContrastLoss(nn.Module):
         # only counts cross connectivity
         pred_labeled, pred_num = measure.label(pred, return_num=True, connectivity=1)
         gt_labeled, gt_num = measure.label(gt, return_num=True, connectivity=1)
-
-
+        # print("pred_num")
+        # # 第一次40
+        # print(pred_num)
+        # print("gt_num")
+        # # 第一次2
+        # print(gt_num)
+        # exit(1)
+        # with open('feats_output——xxn_pred_labeled.txt', 'w') as f:
+        #     # 如果 feats 是一个列表或包含较复杂数据结构，你可以遍历并写入
+        #     for row in pred_labeled:
+        #         line = " ".join(map(str, row))
+        #         f.write(line + "\n")
+        # exit(1)
         #gt_colors = assign_colors(gt_labeled, gt_num)
         #pred_colors = assign_colors(pred_labeled, pred_num)
         #cv2.imwrite('gt_colors.jpg', gt_colors)
@@ -149,24 +208,40 @@ class GlandContrastLoss(nn.Module):
         results = []
         #pred
         res = np.zeros(gt.shape, dtype=np.uint8)
-
+        ans = np.zeros(gt.shape, dtype=np.uint8)
+        process_list=[]
+        rate = self.rate
+        
         # based on pred glands
+        # print('pred_num', pred_num)
         for i in range(0, pred_num):
             i += 1
 
             # gt != 0 is gt gland
             # pred_labeled == i is the ith gland of pred
             pred_labeled_i = pred_labeled == i
+            # with open('feats_output——xxn_pred_labeled_i.txt', 'w') as f:
+            # # 如果 feats 是一个列表或包含较复杂数据结构，你可以遍历并写入
+            #     for row in pred_labeled_i:
+            #         line = " ".join(map(str, row))
+            #         f.write(line + "\n")
+                    
+            # exit(1)
+            #返回的也是一个boolean数组
+            # 这里的mask应该是预测的和真实值对上的
             mask = (pred_labeled_i) & (gt != 0)
 
             # for each pixel of mask in corresponding gt img
             #print(gt_labeled[mask].shape[0], len(gt_labeled[mask]))
+            # print(len(gt_labeled[mask]))
+            # exit(1)
             if len(gt_labeled[mask]) == 0:
                 # no gt gland instance in corresponding
                 # location of gt image
 
                 #res[pred_labeled == i] = 1
                 res[pred_labeled_i] = 1
+                ans[pred_labeled_i] = 1
                 count_over_conn += 1
 
                 continue
@@ -177,7 +252,19 @@ class GlandContrastLoss(nn.Module):
                 # gt image
                 #res[pred_labeled == i] = 1
                 res[pred_labeled_i] = 1
-
+                
+                # 处理gt
+                gt_unique_values=np.unique(gt_labeled[mask])
+                new_pic = np.zeros(gt.shape, dtype=np.uint8)
+                
+                for value in gt_unique_values:
+                    new_pic[gt_labeled == value] = 1
+                    
+                w = unet3.weight_add_np(new_pic, rate)
+                # 是否正则？
+                w = w / w.max() 
+                process_list.append(w)
+                
                 count_over_conn += 1
 
             else:
@@ -185,6 +272,7 @@ class GlandContrastLoss(nn.Module):
                 if mask.sum() / pred_labeled_i.sum() < 0.5:
                     #res[pred_labeled == i] = 1
                     res[pred_labeled_i] = 1
+                    ans[pred_labeled_i] = 1
                     count_over_conn += 1
                     #pred_labeled_i_xor = np.logical_xor(pred_labeled_i, mask)
                     #res[pred_labeled_i_xor] = 1
@@ -199,6 +287,7 @@ class GlandContrastLoss(nn.Module):
         results.append(res)
 
         res = np.zeros(gt.shape, dtype=np.uint8)
+        # print('gt_num', gt_num)
         for i in range(0, gt_num):
             i += 1
             gt_labeled_i = gt_labeled == i
@@ -211,6 +300,7 @@ class GlandContrastLoss(nn.Module):
 
                 #res[gt_labeled == i] = 1
                 res[gt_labeled_i] = 1
+                ans[gt_labeled_i] = 1
                 #cv2.imwrite('resG{}.png'.format(i), res)
                 count_under_conn += 1
                 continue
@@ -220,6 +310,19 @@ class GlandContrastLoss(nn.Module):
                 res[gt_labeled_i] = 1
                 #cv2.imwrite('resG{}.png'.format(i), res)
                 count_under_conn += 1
+                # 处理pred
+                pred_unique_values=np.unique(pred_labeled[mask])
+                new_pic = np.zeros(pred.shape, dtype=np.uint8)
+                
+                for value in pred_unique_values:
+                    new_pic[pred_labeled == value] = 1
+                    
+                w = unet3.weight_add_np(new_pic, rate)
+                # print("test")
+                # print(w.max())
+                # print(np.isnan(w.max()))
+                w = w / w.max() 
+                process_list.append(w)
 
             else:
                 if mask.sum() / gt_labeled_i.sum() < 0.5:
@@ -227,6 +330,7 @@ class GlandContrastLoss(nn.Module):
                     #print(i, i, i, i)
                     #res[gt_labeled == i] = 1
                     res[gt_labeled_i] = 1
+                    ans[gt_labeled_i] = 1
                     count_under_conn += 1
             #print(mask.sum() / (gt_labeled == i).sum(), 'cc111')
             #start = time.time()
@@ -287,13 +391,20 @@ class GlandContrastLoss(nn.Module):
 
             #print(pred_res.shape, 'pred_res.shape')
             res = cv2.bitwise_xor(pred_res, gt_res)
-
+            for index, pic in enumerate(process_list):
+                
+                pic_xor = pic * res
+                # pic_xor=res
+                # pic_xor = pic & res
+                ans[pic_xor > 0.3]=1
+                # ans[pic_xor != 0]=1
             # vis
             ###################################################
             # cv2.imwrite('my_mutal_alg/final_result.png', res * 255)
             ###################################################
             #print(pred_num)
-            return res
+            # return res
+            return ans
             #return pred_res
             #return gt_res, pred_res, res, cc
                 #if len(pred_labeled[mask]) == 0:
@@ -310,13 +421,36 @@ class GlandContrastLoss(nn.Module):
 
     def segment_mask(self, gts, preds, op='or', out_size=(160, 160)):
         bs = gts.shape[0]
+        # print("bs")
+        # print(bs)
+        # exit(1)
         preds = np.argmax(preds, axis=1)
+        # print("preds")
+        # print(preds.shape)
+        # exit(1)
         #for b_idx in range(batch_size):
         #    res.append(segment_level_loss(gt[b_idx], preds[b_idx]))
         t1 = time.time()
+        # (480, 480)
+        # print("gt0")
+        # print(gts[0].shape)
+        # print("pred0")
+        # (480, 480)
+        # print(preds[0].shape)
+        
         res = [self.segment_level_loss(gt=gts[b], pred=preds[b], op=op, out_size=out_size) for b in range(bs)]
         t2 = time.time()
-        #print((t2 - t1) / bs)
+        # print("time")
+        # print((t2 - t1) / bs)
+        # exit(1)
+        # print("res")
+        # 长度是8
+        # print(len(res))
+        # (480, 480)
+        # print(res[0].shape)
+        
+        # exit(1)
+        
         self.total_time += (t2 - t1)
         self.total_samples += bs
         # print('avg time:', self.total_time / self.total_samples)
@@ -578,10 +712,13 @@ class GlandContrastLoss(nn.Module):
         #print(anchor.shape, postive.T.shape)
 
         #num_pos = postive.shape[0]
-
+        
+        # 进行爱因斯坦求和约定运算
         logits_pos = torch.einsum('nc, ck->nk', [anchor, postive.T])
         logits_neg = torch.einsum('nc, ck->nk', [anchor, negative.T])
-
+        # print(logits_pos.shape)
+        # torch.Size([32, 1000])
+        # exit(1)
 
         #numberator = torch.exp(logits_pos / self.temperature)
         #denominator = torch.exp(logits_neg / self.temperature).sum(dim=1).unsqueeze(-1) + numberator
@@ -765,15 +902,24 @@ class GlandContrastLoss(nn.Module):
 
 
     def cal_uncertain_mask(self, pred_logits, mask):
+        # print(pred_logits.shape)
+        # exit(1)
         pred_probs = pred_logits.softmax(dim=1)
+        # print(pred_probs.shape)
+        # exit(1)
         diff = torch.abs(pred_probs[:, 0, :, :] - pred_probs[:, 1, :, :])
+        # print(diff.shape)
+        # exit(1)
         out = diff
         #out = torch.exp(- 5 * diff ** 2)
         #out = torch.exp(diff ** 2 / 0.7)
         #out = torch.exp(-5 * diff ** 2 )
-
+        # # torch.Size([8, 480, 480])
+        # print(mask.shape)
         out = out * mask
-
+        # # torch.Size([8, 480, 480])
+        # print(out.shape)
+        # exit(1)
         return out
 
 
@@ -784,7 +930,11 @@ class GlandContrastLoss(nn.Module):
 
         #object_mask = object_hard_mask
         weight_mask = object_hard_mask.sum(dim=(-1, -2)) == 0
-
+        # torch.Size([8, 480, 480])
+        # print(gt_mask.shape)
+        # # torch.Size([8])
+        # print(weight_mask.shape)
+        # exit(1)
         #print(object_hard_mask)
         object_hard_mask[weight_mask] = gt_mask[weight_mask].float()
 
@@ -799,12 +949,18 @@ class GlandContrastLoss(nn.Module):
         #x =
         #print(indices.dtype)
         row = torch.div(indices, H, rounding_mode='trunc') / (H - 1)
+        # print(row)
+
         col = indices % W / (W - 1)
+        # print(col.shape)
+        # exit(1)
         #print('indices', indices)
         #print('row', row)
         #print('col', col)
-
+        # torch.Size([8, 4, 2])
         xy = torch.stack([col, row], dim=-1)
+        # print(xy.shape)
+        # exit(1)
         #print(xy * 8)
 
         return xy
@@ -838,15 +994,20 @@ class GlandContrastLoss(nn.Module):
         return output
 
     def get_points_train(self, gt_seg, uncertain_mask):
-
         batch_size, H, W = gt_seg.shape
 
         assert gt_seg.shape == uncertain_mask.shape
 
-        # cal sample weight
+        # cal sample weixght
         gland_weight = self.compute_sample_weight(gt_seg, uncertain_mask, class_id=1)
         bg_weight = self.compute_sample_weight(gt_seg, uncertain_mask, class_id=0)
-
+        # torch.Size([8, 480, 480])
+        # torch.Size([8, 230400])     
+        # 4
+        # print(gland_weight.shape)
+        # print(gland_weight.view(batch_size, -1).shape)
+        # print(self.num_nagative)
+        # exit(1)
         # sample accordint to weights
         gland_indices = torch.multinomial(gland_weight.view(batch_size, -1), self.num_nagative, replacement=False)
         try:
@@ -854,8 +1015,18 @@ class GlandContrastLoss(nn.Module):
         except:
             print('except...........')
             bg_indices = torch.zeros(batch_size, self.num_nagative, device=gland_indices.device)
-
-
+        # torch.Size([8, 4])
+        # print(bg_indices.shape)
+        # tensor([[122252, 148601, 122192,  30538],
+        # [104849,  68165, 228229, 113965],
+        # [ 10732, 121119, 137542, 104934],
+        # [ 54005, 180010, 223157,  69183],
+        # [ 91597, 168126, 196380, 225184],
+        # [ 99247, 157195,  73606, 185858],
+        # [124209, 142814, 132684, 217508],
+        # [226490, 120620, 119223, 222603]], device='cuda:0')
+        # print(gland_indices)
+        # exit(1)
         # convert indices to points
         gland_points = self.indices_to_points(gland_indices, H, W)
         bg_indices = self.indices_to_points(bg_indices, H, W)
@@ -890,16 +1061,36 @@ class GlandContrastLoss(nn.Module):
 
 
     def multi_level_point_sample(self, feats, points, align_corners, fcs):
+        # <class 'dict'>
+        # print(type(feats))
+        # BasicLinear(
+        # (fc): Sequential(
+        #     (0): Linear(in_features=64, out_features=64, bias=True)
+        # )
+        # )
+        # print(type(fcs[0]))
+        # print(fcs[0])
+        # print(fcs[1])
+        # print(fcs[2])
+        # print(fcs[3])
+        # exit(1)
         out = 0
         #for _, values in feats.items():
 
         out += fcs[0](self.point_sample(feats['low_level'], points, align_corners))
+        # print(out.shape)
         out += fcs[1](self.point_sample(feats['layer2'], points, align_corners))
+        # print(out.shape)
         out += fcs[2](self.point_sample(feats['aux'], points, align_corners))
+        # print(out.shape)
         out += fcs[3](self.point_sample(feats['out'], points, align_corners))
         #out += fcs[4](self.point_sample(feats['gland'], points, align_corners))
 
-
+        # print(type(out))
+        # print(out.shape)
+        # torch.Size([8, 4, 64])
+        # print()
+        # exit(1)
         return out
 
 
@@ -908,18 +1099,77 @@ class GlandContrastLoss(nn.Module):
 
 
         self.store_values = {}
-
-
+        # print("queue")
+        # print(queue.shape)
+        # print("fcs")
+        # print(fcs)
+        # exit(1)
+        # print("pred_logits")
+        # print("low_level shape:",pred_logits['low_level'].shape)
+        # print("layer2 shape:",pred_logits['layer2'].shape)
+        # print("aux shape:",pred_logits['aux'].shape)
+        # print("out:",pred_logits['out'].shape)
+        # print(pred_logits)
+        # print(pred_logits.shape)
+        # with open('feats_output——xxn_pred_logits.txt', 'w') as f:
+        #     # 如果 feats 是一个列表或包含较复杂数据结构，你可以遍历并写入
+        #     for key, value in pred_logits.items():
+        #         f.write(f"{key}: {value}\n")
+        # exit(1)
         with torch.no_grad():
-            mask = self.segment_mask(gts=gt_seg.detach().cpu().numpy(), preds=pred_logits.detach().cpu().numpy(), op=self.op, out_size=gt_seg.shape[-2:])
+            # 会进来
+            # print("进来了")
+            # exit(1)
+            # print()
+            # print("gt_seg.detach().cpu().numpy()的形状:")
+            # print(gt_seg.detach().cpu().numpy().shape)
+            # print("pred_logits.detach().cpu().numpy()的形状:")
+            # print(pred_logits.detach().cpu().numpy().shape)
+            
+            # print("out_size:")
+            # print(gt_seg.shape[-2:])
+            # print("op是")
+            
+            # print(self.op)
+            # exit(1)
+            mask = self.segment_mask(gts=gt_seg.detach().cpu().numpy(),                                
+                                     preds=pred_logits.detach().cpu().numpy(), 
+                                     op=self.op, out_size=gt_seg.shape[-2:])
             mask = torch.tensor(mask, dtype=gt_seg.dtype, device=gt_seg.device)
+            # print("mask.shape")
+            # print(mask.shape)
+            # print(gt_seg.dtype)
+            # print(gt_seg.device)
+            # exit(1)
+            # with open('feats_output——xxn_mask.txt', 'w') as f:
+            #     for row in mask[0]:
+            #         line = " ".join(map(str, row))
+            #         f.write(line + "\n")
+            # exit(1)
             self.store_values['mask'] = mask
             uncertain_mask = self.cal_uncertain_mask(pred_logits, mask)
             self.store_values['uncertain'] = uncertain_mask
             gland_points, bg_points = self.get_points_train(gt_seg, uncertain_mask)
+        # print("没进来")
+        # exit(1)
+# AttributeError: 'dict' object has no attribute 'shape'内容是如何确认的大小or元素类型
+        # print("feats.shape:",feats.shape)
+        
+        # print("feats:")
+        # 假设 feats 是一个列表或数组
+        # print("low_level shape:",feats['low_level'].shape)
+        # print("layer2 shape:",feats['layer2'].shape)
+        # print("aux shape:",feats['aux'].shape)
+        # print("out:",feats['out'].shape)
+# 将 feats 写入一个文件
+        # with open('feats_output——xxn.txt', 'w') as f:
+        #     # 如果 feats 是一个列表或包含较复杂数据结构，你可以遍历并写入
+        #     for key, value in feats.items():
+        #         f.write(f"{key}: {value}\n")
 
-        #print(feats.shape)
 
+        # print(feats)
+        # exit(1)
         #gland_feats = self.point_sample(feats, gland_points, align_corners=True)
         #gland_feats = gland_feats.permute(0, 2, 1)
 
@@ -992,16 +1242,26 @@ class GlandContrastLoss(nn.Module):
 
         #loss = self.infonce_loss_fn(feats, labels)
 
-
-        #print(gland_feats.shape)
+        # torch.Size([8, 4, 64])
+        # print(gland_feats.shape)
         gland_feats = torch.nn.functional.normalize(gland_feats.contiguous().view(-1, gland_feats.shape[-1]), dim=1, p=2)
-        #print(gland_feats.shape)
+        # print(gland_feats.shape)
+        # torch.Size([32, 64])
+        # exit(1)
         #print(gland_feats.shape, 'after')
         bg_feats = torch.nn.functional.normalize(bg_feats.contiguous().view(-1, bg_feats.shape[-1]), dim=1, p=2)
         #print(bg_feats.shape)
 
         gland_queue = queue[0]
         bg_queue = queue[1]
+        # <class 'torch.Tensor'>
+        # print(type(queue))
+        # print(queue[0])
+        # 2
+        # torch.Size([1000, 64])
+        # print(len(queue))
+        # print(queue[0].shape)
+        # exit(1)
 
         #zeros_short = torch.zeros([gland_feats.shape[0]], device=queue.device, dtype=torch.long)
         #ones_long = torch.ones([gland_queue.shape[0]], device=queue.device, dtype=torch.long)

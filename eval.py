@@ -1,6 +1,10 @@
 import os
 import argparse
 import re
+
+import sys
+sys.path.insert(0, '/home/baiyu/miniconda3/envs/torch1.13/lib/python3.10/site-packages')
+
 import cv2
 
 import torch
@@ -22,7 +26,10 @@ import argparse
 import os
 import time
 import re
-import sys
+# import sys
+
+import numpy
+print(numpy.__file__)
 sys.path.append(os.getcwd())
 import skimage.morphology as morph
 
@@ -53,17 +60,19 @@ import skimage.morphology as morph
 from skimage import measure
 from scipy.spatial.distance import directed_hausdorff as hausdorff
 import cv2
-
+import unet3
 
 
 #from dataset.camvid import CamVid
 #from metrics import Metrics
 #from model import UNet
+counter=0
+rate=30
 
 def segment_level_loss(gt, pred, op='xor', out_size=(160, 160)):
         ignore_idx = 255
 
-
+        
         gt = cv2.resize(gt, out_size[::-1], interpolation=cv2.INTER_NEAREST)
         pred = cv2.resize(pred, out_size[::-1], interpolation=cv2.INTER_NEAREST)
 
@@ -107,24 +116,35 @@ def segment_level_loss(gt, pred, op='xor', out_size=(160, 160)):
         results = []
         #pred
         res = np.zeros(gt.shape, dtype=np.uint8)
-
+        ans = np.zeros(gt.shape, dtype=np.uint8)
+        process_list=[]
         # based on pred glands
         for i in range(0, pred_num):
             i += 1
 
             # gt != 0 is gt gland
             # pred_labeled == i is the ith gland of pred
+            # pred_labeled_i的样子
+            # [[False False False False  True]
+            # [False False False False  True]
+            # [False False False False  True]
+            # [False False False  True  True]
+            # [False False False False  True]]
             pred_labeled_i = pred_labeled == i
+            # mask和pred_labeled_i一样
             mask = (pred_labeled_i) & (gt != 0)
 
             # for each pixel of mask in corresponding gt img
             #print(gt_labeled[mask].shape[0], len(gt_labeled[mask]))
+            # gt_labeled[mask]是一维的[2 2 2 2 2]
+            # 这种情况是pred有，gt没有，也
             if len(gt_labeled[mask]) == 0:
                 # no gt gland instance in corresponding
                 # location of gt image
 
                 #res[pred_labeled == i] = 1
                 res[pred_labeled_i] = 1
+                ans[pred_labeled_i] = 1
                 # count_under_conn_pred += 1
 
                 continue
@@ -135,6 +155,18 @@ def segment_level_loss(gt, pred, op='xor', out_size=(160, 160)):
                 # gt image
                 #res[pred_labeled == i] = 1
                 res[pred_labeled_i] = 1
+                # 处理gt
+                gt_unique_values=np.unique(gt_labeled[mask])
+                new_pic = np.zeros(gt.shape, dtype=np.uint8)
+                
+                for value in gt_unique_values:
+                    new_pic[gt_labeled == value] = 1
+                    
+                w = unet3.weight_add_np(new_pic, rate)
+                # 是否正则？
+                w = w / w.max() 
+                process_list.append(w)
+                
 
                 # count_under_conn_pred += 1
 
@@ -147,6 +179,7 @@ def segment_level_loss(gt, pred, op='xor', out_size=(160, 160)):
                 if mask.sum() / pred_labeled_i.sum() < 0.5:
                     #res[pred_labeled == i] = 1
                     res[pred_labeled_i] = 1
+                    ans[pred_labeled_i] = 1
                     # count_under_conn_pred += 1
                     #pred_labeled_i_xor = np.logical_xor(pred_labeled_i, mask)
                     #res[pred_labeled_i_xor] = 1
@@ -173,6 +206,7 @@ def segment_level_loss(gt, pred, op='xor', out_size=(160, 160)):
 
                 #res[gt_labeled == i] = 1
                 res[gt_labeled_i] = 1
+                ans[gt_labeled_i] = 1
                 #cv2.imwrite('resG{}.png'.format(i), res)
                 # count_over_conn_pred += 1
 
@@ -182,9 +216,18 @@ def segment_level_loss(gt, pred, op='xor', out_size=(160, 160)):
             if pred_labeled[mask].min() != pred_labeled[mask].max():
                 #res[gt_labeled == i] = 1
                 res[gt_labeled_i] = 1
+                # 处理pred
+                pred_unique_values=np.unique(pred_labeled[mask])
+                new_pic = np.zeros(pred.shape, dtype=np.uint8)
+                
+                for value in pred_unique_values:
+                    new_pic[pred_labeled == value] = 1
+                    
+                w = unet3.weight_add_np(new_pic, rate)
+                w = w / w.max() 
+                process_list.append(w)
                 #cv2.imwrite('resG{}.png'.format(i), res)
                 # count_over_conn += 1
-
                 count_over_conn_gt += 1
 
                 # count_under_conn_pred += len(np.unique(pred_labeled[mask])) - 1
@@ -195,6 +238,7 @@ def segment_level_loss(gt, pred, op='xor', out_size=(160, 160)):
                     #print(i, i, i, i)
                     #res[gt_labeled == i] = 1
                     res[gt_labeled_i] = 1
+                    ans[gt_labeled_i] = 1
                     # count_over_conn += 1
 
                     count_over_conn_gt += 1
@@ -258,7 +302,28 @@ def segment_level_loss(gt, pred, op='xor', out_size=(160, 160)):
 
             #print(pred_res.shape, 'pred_res.shape')
             res = cv2.bitwise_xor(pred_res, gt_res)
-
+            
+            global counter
+            counter +=1
+            def save_pred_as_image(pred, output_filename):
+                # 确保 pred 是 uint8 类型
+                # pred_uint8 = (pred * 255).astype('uint8') if pred.dtype != 'uint8' else pred
+                pred_uint8 = (pred * 255).astype('uint8') 
+                # 保存为PNG文件
+                cv2.imwrite(output_filename, pred_uint8)
+                
+                print(f"Prediction saved to {output_filename}")    
+            # for pic in process_list:
+            for index, pic in enumerate(process_list):
+                save_pred_as_image(pic,f'./unetans2/{counter}xor_{index}.png')
+                pic_xor = pic * res
+                # pic_xor = pic & res
+                ans[pic_xor!=0]=1
+            save_pred_as_image(ans,f'./unetans2/{counter}xor.png')
+            save_pred_as_image(gt_res, f'./unetans2/{counter}eval_gt.png')    
+            save_pred_as_image(pred_res, f'./unetans2/{counter}eval_pred.png')    
+            save_pred_as_image(res, f'./unetans2/{counter}eval_xor.png')    
+            # exit(0)
             # vis
             ###################################################
             # cv2.imwrite('my_mutal_alg/final_result.png', res * 255)
@@ -330,15 +395,25 @@ def connect(net, val_dataloader, args, val_set):
 
                 h, w = gt_seg_map.shape
                 pred = cv2.resize(pred.astype('uint8'), (w, h), interpolation=cv2.INTER_NEAREST)
-
-                return pred
+                def save_pred_as_image(pred, output_filename):
+                    # 确保 pred 是 uint8 类型
+                    # pred_uint8 = (pred * 255).astype('uint8') if pred.dtype != 'uint8' else pred
+                    pred_uint8 = (pred * 255).astype('uint8') 
+                    # 保存为PNG文件
+                    cv2.imwrite(output_filename, pred_uint8)
+                    
+                    print(f"Prediction saved to {output_filename}")    
+                # save_pred_as_image(pred, 'eval_pred.png')    
+                # exit(0)        
+                # return pred
 
                 # print(np.unique(pred))
                 # cv2.imwrite('test.png', pred * 255)
                 # import sys; sys.exit()
 
                 img_name = img_meta['img_name']
-
+                # print(img_name)
+                # exit(0)
                 # contrasive_loss_fn.segment_level_loss(gt, pred, op='xor', out_size=ori_shape):
                 #segment_level_loss(gt, pred, op='xor', out_size=ori_shape)
                 # print(gt_seg_map.dtype)

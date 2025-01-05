@@ -3,6 +3,11 @@ import os
 import time
 import re
 import sys
+import sys
+sys.path.insert(0, '/home/baiyu/miniconda3/envs/torch1.13/lib/python3.10/site-packages')
+
+import numpy
+print(numpy.__file__)
 sys.path.append(os.getcwd())
 import skimage.morphology as morph
 
@@ -37,25 +42,25 @@ def train(net, train_dataloader, val_loader, writer, args, val_set):
     ckpt_path = os.path.join(
         root_path, settings.CHECKPOINT_FOLDER, args.prefix + '_' + settings.TIME_NOW)
     # log_dir = os.path.join(root_path, settings.LOG_FOLDER, args.prefix + '_' +settings.TIME_NOW)
-
+    # print("train:ckpt_path",ckpt_path)
     if not os.path.exists(ckpt_path):
         os.makedirs(ckpt_path)
     # checkpoint_path = os.path.join(checkpoint_path, '{epoch}-{type}.pth')
 
-    if not os.path.exists(ckpt_path):
-        os.makedirs(ckpt_path)
-
+    print("train:ckpt_path:",ckpt_path)
     ckpt_manager = utils.CheckPointManager(ckpt_path, max_keep_ckpts=5)
-
+    # exit()
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.wd)
     # iter_per_epoch = len(train_dataset) / args.b
 
     # max_iter = args.e * len(train_loader)
     total_iter = args.iter
     warmup_iter = int(args.iter * 0.1)
-
+#这段代码实现了一个自定义的学习率调度器类 PolynomialLR，用于根据多项式衰减公式调整学习率。
     train_scheduler = PolynomialLR(optimizer, total_iters=total_iter - warmup_iter, power=0.9, min_lr=args.min_lr)
+    #这段代码实现了一个 Warm-Up 学习率调度器 WarmUpLR，用于在训练的初始阶段逐步增加学习率（Learning Rate, LR），以缓解模型在训练初期因学习率过大而导致的不稳定训练问题。
     warmup_scheduler = WarmUpLR(optimizer, total_iters=warmup_iter)
+    
     lr_schduler = WarmUpWrapper(warmuplr_scheduler=warmup_scheduler, lr_scheduler=train_scheduler)
 
 
@@ -67,9 +72,9 @@ def train(net, train_dataloader, val_loader, writer, args, val_set):
     cnt_loss_fn_ce = nn.CrossEntropyLoss(weight=cnt_weight, ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
     cnt_loss_fn_dice = DiceLoss(class_weight=cnt_weight, ignore_index=train_dataloader.dataset.ignore_index, reduction='none')
     #var_loss_fn = LossVariance()
-
+    # print("进入GlandContrastLoss")
     #contrasive_loss_fn = GlandContrastLoss(8, ignore_idx=train_dataloader.dataset.ignore_index, temperature=0.07)
-    contrasive_loss_fn = GlandContrastLoss(4, ignore_idx=train_dataloader.dataset.ignore_index, temperature=0.07)
+    contrasive_loss_fn = GlandContrastLoss(4, rate=args.rate,ignore_idx=train_dataloader.dataset.ignore_index, temperature=0.07)
 
     #loss_l2 = nn.MSELoss()
     #loss_seg = SegmentLevelLoss(op=args.op)
@@ -96,7 +101,8 @@ def train(net, train_dataloader, val_loader, writer, args, val_set):
     #for batch_idx, (images, masks) in enumerate(train_loader):
     net.train()
 
-
+    # print("net trian xxx")
+    # exit()
     scaler = GradScaler()
 
     total_metrics = ['total_F1', 'total_Dice', 'total_Haus']
@@ -131,9 +137,19 @@ def train(net, train_dataloader, val_loader, writer, args, val_set):
 
     vis_idx = 5
     train_t = time.time()
+    # 100
+    # print(args.eval_iter)
+    # print(type(train_iterloader))
+    # exit(1)
     for iter_idx, (images, masks, weight_maps) in enumerate(train_iterloader):
-
-
+        # print(type(masks))
+        # print(type(weight_maps))
+        # print(iter_idx)
+        # print(total_iter)
+        # exit(1)
+        # print("trian:args.vis:",args.vis)
+        #24.11.19输出是False
+        # exit()
         if args.vis and iter_idx % vis_idx == 0:
 
             for idx, ii in enumerate(images.clone()):
@@ -154,19 +170,16 @@ def train(net, train_dataloader, val_loader, writer, args, val_set):
                 #print(idx + iter_idx * masks.shape[0])
                 #ii = cv2.imwrite('tmp/gt_{}.png'.format(idx + iter_idx * masks.shape[0]), ii.astype('uint8'))
 
-
-
         #print(masks.max(), 'xiansu??', images.shape)
-
-
-
         data_time = time.time() - train_t
 
         if args.gpu:
             images = images.cuda()
             weight_maps = weight_maps.cuda()
             masks = masks.cuda()
-
+        # print("trian:args.fp16:",args.fp16)
+        # true
+        # exit(1)
         optimizer.zero_grad()
         if args.fp16:
             with autocast():
@@ -216,7 +229,8 @@ def train(net, train_dataloader, val_loader, writer, args, val_set):
 
                     sup_loss = (loss + xor_mask * loss).mean()
                     loss = sup_loss + args.alpha * contrasive_loss
-
+                    # print(type(loss))
+                    # exit(0)
 
                 #loss = loss.mean()
 
@@ -889,7 +903,7 @@ if __name__ == '__main__':
     parser.add_argument('-lr', type=float, default=0.007,
                         help='initial learning rate')
     parser.add_argument('-e', type=int, default=120, help='training epoches')
-    parser.add_argument('-iter', type=int, default=40000, help='training epoches')
+    parser.add_argument('-iter', type=int, default=25000, help='training epoches')
     parser.add_argument('-eval_iter', type=int, default=2000, help='training epoches')
     parser.add_argument('-wd', type=float, default=1e-4, help='training epoches')
     parser.add_argument('-resume', type=bool, default=False, help='if resume training')
@@ -910,8 +924,9 @@ if __name__ == '__main__':
     parser.add_argument('-wait', action='store_true', default=False, help='whether to wait until there is gpu aviliable')
     parser.add_argument('-vis', action='store_true', default=False, help='vis result of mid layer')
     parser.add_argument('-imgset', type=str, default='train', help='default training set')
+    parser.add_argument('-rate', type=int, default=30, help='unet rate')
     args = parser.parse_args()
-    print(args)
+    print("args: ",args)
 
     if args.wait:
         from gpustats import GPUStats
@@ -920,11 +935,13 @@ if __name__ == '__main__':
 
     root_path = os.path.dirname(os.path.abspath(__file__))
 
+    # print("root_path",root_path)
+    # exit(0)
     # checkpoint_path = os.path.join(
     #     root_path, settings.CHECKPOINT_FOLDER, args.prefix + '_' + settings.TIME_NOW)
     log_dir = os.path.join(root_path, settings.LOG_FOLDER, args.prefix + '_' +settings.TIME_NOW)
     print('saving tensorboard log into {}'.format(log_dir))
-
+    # exit(0)
     # if not os.path.exists(checkpoint_path):
     #     os.makedirs(checkpoint_path)
     # checkpoint_path = os.path.join(checkpoint_path, '{epoch}-{type}.pth')
@@ -940,7 +957,7 @@ if __name__ == '__main__':
     # img_set = 'trainA'
     assert args.imgset in ['train', 'trainA', 'trainB']
     img_set = args.imgset
-    print(img_set)
+    print("img_set",img_set)
 
     if img_set == 'trainA':
         val_set = 'testB'
@@ -956,7 +973,9 @@ if __name__ == '__main__':
     train_dataset = train_loader.dataset
 
     val_loader = utils.data_loader(args, val_set)
-
+    # print(train_dataset.class_num)
+    # 2
+    # exit(1)
     net = utils.get_model(args.net, 3, train_dataset.class_num, args=args)
     #net.load_state_dict(torch.load('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Monday_16_January_2023_05h_11m_49s/iter_39999.pt'))
     # print(sum([p.numel() for p in net.parameters()]))
@@ -971,7 +990,7 @@ if __name__ == '__main__':
         print('Loading weight file: {}...'.format(weight_path))
         net.load_state_dict(torch.load(weight_path))
         print('Done loading!')
-
+    net.load_state_dict(torch.load("/home/xuxinan/mmCode2/checkpoints/unet_branch_SGD_473_Wednesday_11_December_2024_13h_27m_38s/best_total_F1_0.9052_iter_21499.pt"))
     #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load('/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Monday_16_January_2023_05h_11m_49s/iter_39999.pt'))
     # test_pretrain_crag_glas_rings_prostate
     # best pretrain
@@ -1078,24 +1097,26 @@ if __name__ == '__main__':
 
 
     # milestone no crag
-    ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Tuesday_18_April_2023_22h_09m_55s/iter_45999.pt'
+    # ckpt_path = '/data/hdd1/by/House-Prices-Advanced-Regression-Techniques/checkpoints/tri_graph_Tuesday_18_April_2023_22h_09m_55s/iter_45999.pt'
 
 
-    # draw uncertain map
-    print('Loading pretrained checkpoint from {}'.format(ckpt_path))
-    ckpt = torch.load(ckpt_path)
-    if 'state_dict' in ckpt:
-        ckpt = ckpt['state_dict']
+    # # draw uncertain map
+    # print('Loading pretrained checkpoint from {}'.format(ckpt_path))
+    # ckpt = torch.load(ckpt_path)
+    # # print("train",ckpt.shape())
+    # # exit()
+    # if 'state_dict' in ckpt:
+    #     ckpt = ckpt['state_dict']
 
-    new_state_dict = utils.on_load_checkpoint(net.state_dict(), ckpt)
-    #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path))
-    net.load_state_dict(new_state_dict)
-    print('Done!')
+    # new_state_dict = utils.on_load_checkpoint(net.state_dict(), ckpt)
+    # #new_state_dict = utils.on_load_checkpoint(net.state_dict(), torch.load(ckpt_path))
+    # net.load_state_dict(new_state_dict)
+    # print('Done!')
 
     if args.gpu:
         net = net.cuda()
 
-    tensor = torch.Tensor(1, 3, 480, 480)
+    # tensor = torch.Tensor(1, 3, 480, 480)
     # net.eval()
     #utils.visualize_network(writer, net, tensor)
     net.train()

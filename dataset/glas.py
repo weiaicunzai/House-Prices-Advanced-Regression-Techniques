@@ -3,7 +3,7 @@ import zipfile
 import shutil
 import glob
 import re
-
+import sys
 import cv2
 import torch
 import torch.nn as nn
@@ -31,6 +31,8 @@ class Glas(Dataset):
         self.class_num = len(self.class_names)
 
         data_folder = os.path.join(path, 'Warwick QU Dataset (Released 2016_07_08)')
+        # data_folder = path
+        print("Glas : data_folder:",data_folder)
         if not os.path.exists(data_folder):
             if not os.path.exists(os.path.join(path, file_name)):
                 raise RuntimeError('Dataset not found or corrupted.' +
@@ -43,6 +45,7 @@ class Glas(Dataset):
         self.labels = []
         self.weight_maps = []
         search_path = os.path.join(data_folder, '**', '*.bmp')
+        print("search_path:",search_path)
         #image_re = re.escape(image_set + '_[0-9]+\.bmp')
         #image_re = image_set + '_[0-9]+\.bmp'
         #label_re = re.escape(image_set + '_[0-9]+_anno\.bmp')
@@ -50,6 +53,8 @@ class Glas(Dataset):
             raise ValueError('wrong image_set argument')
         label_re = image_set + '_[0-9]+_' + 'anno' + '\.bmp'
         #label_re =  'anno' + '\.bmp'
+        print("Glas:label_re",label_re)
+        # exit()
         if image_set == 'val':
             label_re = 'test[A|B]' +  '_[0-9]+_' + 'anno' + '\.bmp'
 
@@ -77,7 +82,8 @@ class Glas(Dataset):
         self.image_names = []
         for bmp in glob.iglob(search_path, recursive=True):
             if re.search(label_re, bmp):
-                # print(bmp)
+                # print("Glas bmp",bmp)
+                # exit()
                 self.labels.append(
                     self.construct_contour(cv2.imread(bmp, -1)))
                 bmp = bmp.replace('_anno', '')

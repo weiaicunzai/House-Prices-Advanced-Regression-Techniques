@@ -433,6 +433,7 @@ class TG(nn.Module):
         #q_len = 2500
         # q_dim = 256
         q_dim = self.hidden_dim
+        #定义一个用于存储每个类别特征的 特征队列，可能用于对比学习（Contrastive Learning）或其他任务。
         self.register_buffer("queue", torch.randn(num_classes, q_len, q_dim))
         # self.register_buffer("queue", torch.randn(num_classes, q_len, 2))
         self.queue = nn.functional.normalize(self.queue, p=2, dim=2)
@@ -592,8 +593,14 @@ class TG(nn.Module):
             align_corners=True,
             mode='bilinear'
         )
-
-
+        # torch.Size([8, 2, 480, 480])
+        # print(gland.shape)
+        # torch.Size([8, 2, 480, 480])
+        # print(aux.shape)
+        # dict
+        # print(feats.shape)
+        # exit(0)
+        
         return gland, aux, feats
 
 

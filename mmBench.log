@@ -1,0 +1,513 @@
+nohup: 忽略输入
+/home/baiyu/miniconda3/bin/conda
+/home/baiyu/miniconda3/envs/torch1.13/lib/python3.10/site-packages/numpy/__init__.py
+ok
+args:  Namespace(b=8, lr=0.004, e=120, iter=2000, eval_iter=100, wd=0.0001, resume=False, net='tgt', dataset='Glas', prefix='unet_branch_SGD_473', alpha=0.1, op='or', download=True, gpu=True, baseline=False, pretrain=False, poly=True, min_lr=0.0004, branch='hybird', fp16=True, wait=False, vis=False, imgset='train', rate=25)
+saving tensorboard log into /home/xuxinan/mmCode2/runs/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s
+img_set train
+Glas : data_folder: /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)
+search_path: /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)/**/*.bmp
+Glas:label_re train_[0-9]+_anno\.bmp
+
+train
+Glas : data_folder: /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)
+search_path: /data/hdd1/by/House-Prices-Advanced-Regression-Techniques/data/Warwick QU Dataset (Released 2016_07_08)/**/*.bmp
+Glas:label_re val_[0-9]+_anno\.bmp
+
+val
+
+TG(
+  (backbone): ResNet(
+    (conv1): Sequential(
+      (0): Conv2d(3, 32, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+      (1): BatchNorm2d(32, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (2): ReLU(inplace=True)
+      (3): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+      (4): BatchNorm2d(32, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (5): ReLU(inplace=True)
+      (6): Conv2d(32, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+    )
+    (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (act1): ReLU(inplace=True)
+    (maxpool): MaxPool2d(kernel_size=3, stride=2, padding=1, dilation=1, ceil_mode=False)
+    (layer1): Sequential(
+      (0): BasicBlock(
+        (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+      )
+      (1): BasicBlock(
+        (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+      )
+      (2): BasicBlock(
+        (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+      )
+    )
+    (layer2): Sequential(
+      (0): BasicBlock(
+        (conv1): Conv2d(64, 128, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+        (downsample): Sequential(
+          (0): AvgPool2d(kernel_size=2, stride=2, padding=0)
+          (1): Conv2d(64, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        )
+      )
+      (1): BasicBlock(
+        (conv1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+      )
+      (2): BasicBlock(
+        (conv1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+      )
+      (3): BasicBlock(
+        (conv1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+      )
+    )
+    (layer3): Sequential(
+      (0): BasicBlock(
+        (conv1): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+        (downsample): Sequential(
+          (0): Identity()
+          (1): Conv2d(128, 256, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        )
+      )
+      (1): BasicBlock(
+        (conv1): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+      )
+      (2): BasicBlock(
+        (conv1): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+      )
+      (3): BasicBlock(
+        (conv1): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+      )
+      (4): BasicBlock(
+        (conv1): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+      )
+      (5): BasicBlock(
+        (conv1): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+      )
+    )
+    (layer4): Sequential(
+      (0): BasicBlock(
+        (conv1): Conv2d(256, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+        (downsample): Sequential(
+          (0): Identity()
+          (1): Conv2d(256, 512, kernel_size=(1, 1), stride=(1, 1), bias=False)
+          (2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        )
+      )
+      (1): BasicBlock(
+        (conv1): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(2, 2), dilation=(2, 2), bias=False)
+        (bn1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+      )
+      (2): BasicBlock(
+        (conv1): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(4, 4), dilation=(4, 4), bias=False)
+        (bn1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (drop_block): Identity()
+        (act1): ReLU(inplace=True)
+        (aa): Identity()
+        (conv2): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (bn2): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (act2): ReLU(inplace=True)
+      )
+    )
+    (global_pool): Identity()
+    (fc): Identity()
+  )
+  (project): Sequential(
+    (0): Conv2d(64, 48, kernel_size=(1, 1), stride=(1, 1), bias=False)
+    (1): BatchNorm2d(48, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace=True)
+  )
+  (classifier): Sequential(
+    (0): Conv2d(112, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+    (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace=True)
+    (3): Conv2d(64, 2, kernel_size=(1, 1), stride=(1, 1))
+  )
+  (fcs): ModuleList(
+    (0): BasicLinear(
+      (fc): Sequential(
+        (0): Linear(in_features=64, out_features=64, bias=True)
+      )
+    )
+    (1): BasicLinear(
+      (fc): Sequential(
+        (0): Linear(in_features=128, out_features=64, bias=True)
+      )
+    )
+    (2): BasicLinear(
+      (fc): Sequential(
+        (0): Linear(in_features=256, out_features=64, bias=True)
+      )
+    )
+    (3): BasicLinear(
+      (fc): Sequential(
+        (0): Linear(in_features=512, out_features=64, bias=True)
+      )
+    )
+  )
+  (gland_head_project): Sequential(
+    (0): BasicConv2d(
+      (conv): Sequential(
+        (0): Conv2d(512, 64, kernel_size=(1, 1), stride=(1, 1))
+        (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (2): ReLU(inplace=True)
+      )
+    )
+  )
+  (aux_head): Sequential(
+    (0): BasicConv2d(
+      (conv): Sequential(
+        (0): Conv2d(256, 128, kernel_size=(1, 1), stride=(1, 1))
+        (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (2): ReLU(inplace=True)
+      )
+    )
+    (1): BasicConv2d(
+      (conv): Sequential(
+        (0): Conv2d(128, 2, kernel_size=(1, 1), stride=(1, 1))
+        (1): BatchNorm2d(2, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (2): ReLU(inplace=True)
+      )
+    )
+  )
+)
+
+train:ckpt_path: /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s
+GlandContrastLoss 4
+rate:25
+/home/baiyu/miniconda3/envs/torch1.13/lib/python3.10/site-packages/torch/optim/lr_scheduler.py:138: UserWarning: Detected call of `lr_scheduler.step()` before `optimizer.step()`. In PyTorch 1.1.0 and later, you should call them in the opposite order: `optimizer.step()` before `lr_scheduler.step()`.  Failure to do this will result in PyTorch skipping the first value of the learning rate schedule. See more details at https://pytorch.org/docs/stable/optim.html#how-to-adjust-learning-rate
+  warnings.warn("Detected call of `lr_scheduler.step()` before `optimizer.step()`. "
+/home/xuxinan/mmCode2/losses/loss.py:265: RuntimeWarning: invalid value encountered in divide
+  w = w / w.max()
+Training Iter: [50/2000] Lr:0.001000 Total Loss:0.7540, Iter time:0.7955s Data loading time:0.0003s
+Training Iter: [100/2000] Lr:0.002000 Total Loss:0.6777, Iter time:0.7024s Data loading time:0.0001s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:09<03:07,  9.85s/it] 10%|█         | 2/20 [00:17<02:28,  8.27s/it] 15%|█▌        | 3/20 [00:50<05:35, 19.73s/it] 20%|██        | 4/20 [01:11<05:22, 20.17s/it] 25%|██▌       | 5/20 [01:32<05:11, 20.74s/it] 30%|███       | 6/20 [01:38<03:38, 15.58s/it] 35%|███▌      | 7/20 [01:56<03:30, 16.21s/it] 40%|████      | 8/20 [02:05<02:48, 14.05s/it] 45%|████▌     | 9/20 [02:12<02:11, 11.95s/it] 50%|█████     | 10/20 [02:21<01:48, 10.83s/it] 55%|█████▌    | 11/20 [02:31<01:36, 10.67s/it] 60%|██████    | 12/20 [02:41<01:24, 10.57s/it] 65%|██████▌   | 13/20 [02:47<01:04,  9.20s/it] 70%|███████   | 14/20 [02:54<00:50,  8.41s/it] 75%|███████▌  | 15/20 [03:00<00:38,  7.64s/it]/home/baiyu/miniconda3/envs/torch1.13/lib/python3.10/site-packages/skimage/_shared/utils.py:157: UserWarning: Only one label was provided to `remove_small_objects`. Did you mean to use a boolean array?
+  return func(*args, **kwargs)
+ 80%|████████  | 16/20 [03:08<00:30,  7.71s/it] 85%|████████▌ | 17/20 [03:15<00:23,  7.69s/it] 90%|█████████ | 18/20 [03:22<00:14,  7.46s/it] 95%|█████████▌| 19/20 [03:31<00:07,  7.86s/it]100%|██████████| 20/20 [03:45<00:00,  9.76s/it]100%|██████████| 20/20 [03:45<00:00, 11.28s/it]
+total: F1 0.8960975358134338, Dice:0.9029365476389721, Haus:52.46347104781914
+testA: F1 0.9232604249133565, Dice:0.9237758462118361, Haus:32.36342853127664
+testB: F1 0.8146088685136672, Dice:0.8404186519203801, Haus:112.76359859744665
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_99.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_total_F1_0.8961_iter_99.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_total_Dice_0.9029_iter_99.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_total_Haus_52.4635_iter_99.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testA_F1_0.9233_iter_99.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testA_Dice_0.9238_iter_99.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testA_Haus_32.3634_iter_99.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testB_F1_0.8146_iter_99.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testB_Dice_0.8404_iter_99.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testB_Haus_112.7636_iter_99.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9029365476389721, 'total_Haus': 52.46347104781914, 'testA_F1': 0.9232604249133565, 'testA_Dice': 0.9237758462118361, 'testA_Haus': 32.36342853127664, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8404186519203801, 'testB_Haus': 112.76359859744665}
+Training Iter: [150/2000] Lr:0.003000 Total Loss:0.7166, Iter time:3.4952s Data loading time:2.8077s
+/home/xuxinan/mmCode2/losses/loss.py:324: RuntimeWarning: invalid value encountered in divide
+  w = w / w.max()
+Training Iter: [200/2000] Lr:0.004000 Total Loss:0.7955, Iter time:0.6140s Data loading time:0.0002s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:09<03:06,  9.82s/it] 10%|█         | 2/20 [00:15<02:15,  7.53s/it] 15%|█▌        | 3/20 [00:31<03:14, 11.47s/it] 20%|██        | 4/20 [00:56<04:28, 16.75s/it] 25%|██▌       | 5/20 [01:24<05:10, 20.70s/it] 30%|███       | 6/20 [01:29<03:33, 15.22s/it] 35%|███▌      | 7/20 [01:43<03:12, 14.84s/it] 40%|████      | 8/20 [01:49<02:27, 12.29s/it] 45%|████▌     | 9/20 [01:56<01:56, 10.60s/it] 50%|█████     | 10/20 [02:05<01:40, 10.07s/it] 55%|█████▌    | 11/20 [02:24<01:54, 12.69s/it] 60%|██████    | 12/20 [02:38<01:44, 13.01s/it] 65%|██████▌   | 13/20 [02:44<01:18, 11.15s/it] 70%|███████   | 14/20 [02:52<00:59,  9.97s/it] 75%|███████▌  | 15/20 [02:58<00:43,  8.77s/it] 80%|████████  | 16/20 [03:05<00:33,  8.40s/it] 85%|████████▌ | 17/20 [03:12<00:23,  7.99s/it] 90%|█████████ | 18/20 [03:20<00:15,  7.79s/it] 95%|█████████▌| 19/20 [03:28<00:08,  8.11s/it]100%|██████████| 20/20 [03:46<00:00, 10.92s/it]100%|██████████| 20/20 [03:46<00:00, 11.32s/it]
+total: F1 0.8732910210889736, Dice:0.8984373041272811, Haus:52.349216530141504
+testA: F1 0.9105175151033823, Dice:0.9178858421561045, Haus:33.8409070797422
+testB: F1 0.7616115390457497, Dice:0.8400916900408104, Haus:107.87414488133943
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_199.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_total_Haus_52.3492_iter_199.pt
+deleting best checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_total_Haus_52.4635_iter_99.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testB_Haus_107.8741_iter_199.pt
+deleting best checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testB_Haus_112.7636_iter_99.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9029365476389721, 'total_Haus': 52.349216530141504, 'testA_F1': 0.9232604249133565, 'testA_Dice': 0.9237758462118361, 'testA_Haus': 32.36342853127664, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8404186519203801, 'testB_Haus': 107.87414488133943}
+Training Iter: [250/2000] Lr:0.003910 Total Loss:0.6794, Iter time:1.8026s Data loading time:1.1828s
+Training Iter: [300/2000] Lr:0.003819 Total Loss:0.6921, Iter time:0.8055s Data loading time:0.0002s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:09<03:03,  9.66s/it] 10%|█         | 2/20 [00:16<02:27,  8.20s/it] 15%|█▌        | 3/20 [00:50<05:33, 19.61s/it] 20%|██        | 4/20 [01:07<04:59, 18.69s/it] 25%|██▌       | 5/20 [01:23<04:28, 17.88s/it] 30%|███       | 6/20 [01:28<03:07, 13.39s/it] 35%|███▌      | 7/20 [01:40<02:48, 12.94s/it] 40%|████      | 8/20 [01:51<02:29, 12.47s/it] 45%|████▌     | 9/20 [01:59<02:01, 11.07s/it] 50%|█████     | 10/20 [02:07<01:40, 10.00s/it] 55%|█████▌    | 11/20 [02:24<01:49, 12.20s/it] 60%|██████    | 12/20 [02:42<01:51, 13.94s/it] 65%|██████▌   | 13/20 [02:49<01:22, 11.84s/it] 70%|███████   | 14/20 [02:57<01:04, 10.72s/it] 75%|███████▌  | 15/20 [03:03<00:46,  9.29s/it] 80%|████████  | 16/20 [03:10<00:34,  8.62s/it] 85%|████████▌ | 17/20 [03:18<00:24,  8.29s/it] 90%|█████████ | 18/20 [03:25<00:16,  8.06s/it] 95%|█████████▌| 19/20 [03:34<00:08,  8.15s/it]100%|██████████| 20/20 [04:13<00:00, 17.42s/it]100%|██████████| 20/20 [04:13<00:00, 12.66s/it]
+total: F1 0.8831168927545759, Dice:0.8951372894988351, Haus:54.839246512691055
+testA: F1 0.9153997179210154, Dice:0.9158706428085518, Haus:36.43796605600808
+testB: F1 0.7862684172552594, Dice:0.8329372295696859, Haus:110.04308788274008
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_299.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9029365476389721, 'total_Haus': 52.349216530141504, 'testA_F1': 0.9232604249133565, 'testA_Dice': 0.9237758462118361, 'testA_Haus': 32.36342853127664, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8404186519203801, 'testB_Haus': 107.87414488133943}
+Training Iter: [350/2000] Lr:0.003729 Total Loss:0.7667, Iter time:0.5372s Data loading time:0.0002s
+Training Iter: [400/2000] Lr:0.003638 Total Loss:0.6664, Iter time:0.4406s Data loading time:0.0002s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:09<03:02,  9.62s/it] 10%|█         | 2/20 [00:17<02:34,  8.61s/it] 15%|█▌        | 3/20 [00:49<05:25, 19.15s/it] 20%|██        | 4/20 [01:04<04:38, 17.43s/it] 25%|██▌       | 5/20 [01:18<04:07, 16.53s/it] 30%|███       | 6/20 [01:24<02:59, 12.85s/it] 35%|███▌      | 7/20 [01:35<02:38, 12.16s/it] 40%|████      | 8/20 [01:46<02:20, 11.67s/it] 45%|████▌     | 9/20 [01:54<01:56, 10.56s/it] 50%|█████     | 10/20 [02:03<01:40, 10.05s/it] 55%|█████▌    | 11/20 [02:16<01:40, 11.11s/it] 60%|██████    | 12/20 [02:33<01:42, 12.77s/it] 65%|██████▌   | 13/20 [02:40<01:18, 11.17s/it] 70%|███████   | 14/20 [02:47<00:59,  9.99s/it] 75%|███████▌  | 15/20 [02:53<00:43,  8.76s/it] 80%|████████  | 16/20 [03:01<00:33,  8.38s/it] 85%|████████▌ | 17/20 [03:08<00:24,  8.12s/it] 90%|█████████ | 18/20 [03:16<00:15,  7.99s/it] 95%|█████████▌| 19/20 [03:24<00:08,  8.08s/it]100%|██████████| 20/20 [03:36<00:00,  9.04s/it]100%|██████████| 20/20 [03:36<00:00, 10.80s/it]
+total: F1 0.8750634245884203, Dice:0.89594545545384, Haus:56.375258250757746
+testA: F1 0.9090005112838393, Dice:0.9162073494353539, Haus:37.04808557261814
+testB: F1 0.7732521645021646, Dice:0.8351597735092982, Haus:114.35677628517661
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_399.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9029365476389721, 'total_Haus': 52.349216530141504, 'testA_F1': 0.9232604249133565, 'testA_Dice': 0.9237758462118361, 'testA_Haus': 32.36342853127664, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8404186519203801, 'testB_Haus': 107.87414488133943}
+Training Iter: [450/2000] Lr:0.003547 Total Loss:0.6202, Iter time:2.5842s Data loading time:1.9606s
+Training Iter: [500/2000] Lr:0.003455 Total Loss:0.7768, Iter time:0.5266s Data loading time:0.0001s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:09<03:07,  9.86s/it] 10%|█         | 2/20 [00:17<02:34,  8.59s/it] 15%|█▌        | 3/20 [00:45<04:53, 17.27s/it] 20%|██        | 4/20 [01:03<04:45, 17.84s/it] 25%|██▌       | 5/20 [01:34<05:35, 22.34s/it] 30%|███       | 6/20 [01:42<04:05, 17.54s/it] 35%|███▌      | 7/20 [02:01<03:55, 18.12s/it] 40%|████      | 8/20 [02:12<03:11, 15.92s/it] 45%|████▌     | 9/20 [02:20<02:24, 13.17s/it] 50%|█████     | 10/20 [02:32<02:09, 12.98s/it] 55%|█████▌    | 11/20 [02:51<02:12, 14.75s/it] 60%|██████    | 12/20 [03:04<01:54, 14.30s/it] 65%|██████▌   | 13/20 [03:13<01:29, 12.77s/it] 70%|███████   | 14/20 [03:21<01:07, 11.26s/it] 75%|███████▌  | 15/20 [03:28<00:49,  9.87s/it] 80%|████████  | 16/20 [03:35<00:36,  9.07s/it] 85%|████████▌ | 17/20 [03:45<00:27,  9.23s/it] 90%|█████████ | 18/20 [03:52<00:17,  8.60s/it] 95%|█████████▌| 19/20 [04:01<00:08,  8.67s/it]100%|██████████| 20/20 [04:20<00:00, 11.85s/it]100%|██████████| 20/20 [04:20<00:00, 13.02s/it]
+total: F1 0.8648650680339184, Dice:0.8819349736023525, Haus:62.59932786108918
+testA: F1 0.9004951074163202, Dice:0.9036023634611422, Haus:41.22411933609679
+testB: F1 0.7579749498867148, Dice:0.8169328040259829, Haus:126.72495343606636
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_499.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9029365476389721, 'total_Haus': 52.349216530141504, 'testA_F1': 0.9232604249133565, 'testA_Dice': 0.9237758462118361, 'testA_Haus': 32.36342853127664, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8404186519203801, 'testB_Haus': 107.87414488133943}
+Training Iter: [550/2000] Lr:0.003363 Total Loss:0.7512, Iter time:0.8890s Data loading time:0.0002s
+Training Iter: [600/2000] Lr:0.003271 Total Loss:0.5881, Iter time:0.6187s Data loading time:0.0002s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:12<04:02, 12.77s/it] 10%|█         | 2/20 [00:22<03:14, 10.79s/it] 15%|█▌        | 3/20 [00:48<05:05, 18.00s/it] 20%|██        | 4/20 [01:13<05:28, 20.55s/it] 25%|██▌       | 5/20 [01:37<05:31, 22.07s/it] 30%|███       | 6/20 [01:43<03:52, 16.61s/it] 35%|███▌      | 7/20 [02:00<03:36, 16.65s/it] 40%|████      | 8/20 [02:14<03:07, 15.59s/it] 45%|████▌     | 9/20 [02:22<02:26, 13.35s/it] 50%|█████     | 10/20 [02:31<02:00, 12.01s/it] 55%|█████▌    | 11/20 [02:50<02:07, 14.13s/it] 60%|██████    | 12/20 [03:03<01:51, 13.94s/it] 65%|██████▌   | 13/20 [03:11<01:24, 12.07s/it] 70%|███████   | 14/20 [03:20<01:06, 11.08s/it] 75%|███████▌  | 15/20 [03:25<00:46,  9.36s/it] 80%|████████  | 16/20 [03:35<00:37,  9.43s/it] 85%|████████▌ | 17/20 [03:43<00:27,  9.05s/it] 90%|█████████ | 18/20 [03:50<00:16,  8.45s/it] 95%|█████████▌| 19/20 [04:00<00:08,  8.78s/it]100%|██████████| 20/20 [04:12<00:00,  9.78s/it]100%|██████████| 20/20 [04:12<00:00, 12.62s/it]
+total: F1 0.8810303649424363, Dice:0.8918333505499492, Haus:53.19682003954942
+testA: F1 0.9043918187229816, Dice:0.9063735476314467, Haus:37.42487822899407
+testB: F1 0.8109460036008024, Dice:0.8482127593054575, Haus:100.51264547121531
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_599.pt
+deleting checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_99.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testB_Dice_0.8482_iter_599.pt
+deleting best checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testB_Dice_0.8404_iter_99.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testB_Haus_100.5126_iter_599.pt
+deleting best checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testB_Haus_107.8741_iter_199.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9029365476389721, 'total_Haus': 52.349216530141504, 'testA_F1': 0.9232604249133565, 'testA_Dice': 0.9237758462118361, 'testA_Haus': 32.36342853127664, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8482127593054575, 'testB_Haus': 100.51264547121531}
+Training Iter: [650/2000] Lr:0.003179 Total Loss:0.7548, Iter time:0.7005s Data loading time:0.0003s
+Training Iter: [700/2000] Lr:0.003086 Total Loss:0.8562, Iter time:0.5859s Data loading time:0.0002s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:11<03:39, 11.54s/it] 10%|█         | 2/20 [00:19<02:45,  9.21s/it] 15%|█▌        | 3/20 [00:55<06:10, 21.82s/it] 20%|██        | 4/20 [01:11<05:11, 19.45s/it] 25%|██▌       | 5/20 [01:37<05:27, 21.85s/it] 30%|███       | 6/20 [01:43<03:49, 16.39s/it] 35%|███▌      | 7/20 [02:01<03:40, 16.98s/it] 40%|████      | 8/20 [02:15<03:09, 15.83s/it] 45%|████▌     | 9/20 [02:24<02:30, 13.68s/it] 50%|█████     | 10/20 [02:35<02:08, 12.87s/it] 55%|█████▌    | 11/20 [03:08<02:52, 19.12s/it] 60%|██████    | 12/20 [03:20<02:15, 16.96s/it] 65%|██████▌   | 13/20 [03:28<01:38, 14.13s/it] 70%|███████   | 14/20 [03:36<01:14, 12.41s/it] 75%|███████▌  | 15/20 [03:42<00:51, 10.39s/it] 80%|████████  | 16/20 [03:48<00:36,  9.23s/it] 85%|████████▌ | 17/20 [03:55<00:25,  8.47s/it] 90%|█████████ | 18/20 [04:02<00:16,  8.03s/it] 95%|█████████▌| 19/20 [04:10<00:08,  8.08s/it]100%|██████████| 20/20 [04:24<00:00,  9.79s/it]100%|██████████| 20/20 [04:24<00:00, 13.22s/it]
+total: F1 0.8575983459789537, Dice:0.8877869399885439, Haus:56.24690658099043
+testA: F1 0.8964964731530737, Dice:0.9111070879438071, Haus:36.08970321708562
+testB: F1 0.740903964456596, Dice:0.8178264961227549, Haus:116.71851667270482
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_699.pt
+deleting checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_199.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9029365476389721, 'total_Haus': 52.349216530141504, 'testA_F1': 0.9232604249133565, 'testA_Dice': 0.9237758462118361, 'testA_Haus': 32.36342853127664, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8482127593054575, 'testB_Haus': 100.51264547121531}
+Training Iter: [750/2000] Lr:0.002993 Total Loss:0.7012, Iter time:0.6093s Data loading time:0.0002s
+Training Iter: [800/2000] Lr:0.002899 Total Loss:0.7798, Iter time:2.3840s Data loading time:1.6901s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:09<03:06,  9.83s/it] 10%|█         | 2/20 [00:18<02:41,  8.99s/it] 15%|█▌        | 3/20 [00:56<06:21, 22.42s/it] 20%|██        | 4/20 [01:09<05:00, 18.76s/it] 25%|██▌       | 5/20 [01:26<04:28, 17.89s/it] 30%|███       | 6/20 [01:31<03:09, 13.52s/it] 35%|███▌      | 7/20 [01:41<02:43, 12.54s/it] 40%|████      | 8/20 [01:53<02:29, 12.43s/it] 45%|████▌     | 9/20 [02:02<02:02, 11.11s/it] 50%|█████     | 10/20 [02:12<01:50, 11.02s/it] 55%|█████▌    | 11/20 [02:27<01:48, 12.05s/it] 60%|██████    | 12/20 [02:40<01:38, 12.31s/it] 65%|██████▌   | 13/20 [02:47<01:15, 10.75s/it] 70%|███████   | 14/20 [02:54<00:58,  9.74s/it] 75%|███████▌  | 15/20 [03:00<00:43,  8.61s/it] 80%|████████  | 16/20 [03:08<00:33,  8.32s/it] 85%|████████▌ | 17/20 [03:17<00:25,  8.64s/it] 90%|█████████ | 18/20 [03:24<00:16,  8.04s/it] 95%|█████████▌| 19/20 [03:32<00:07,  7.98s/it]100%|██████████| 20/20 [03:42<00:00,  8.62s/it]100%|██████████| 20/20 [03:42<00:00, 11.12s/it]
+total: F1 0.8762013970294189, Dice:0.8953531125596111, Haus:52.97501979979355
+testA: F1 0.9085625092718023, Dice:0.9137410235217257, Haus:37.80000594598985
+testB: F1 0.7791180603022709, Dice:0.840189379673267, Haus:98.50006136120456
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_799.pt
+deleting checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_299.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testB_Haus_98.5001_iter_799.pt
+deleting best checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testB_Haus_100.5126_iter_599.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9029365476389721, 'total_Haus': 52.349216530141504, 'testA_F1': 0.9232604249133565, 'testA_Dice': 0.9237758462118361, 'testA_Haus': 32.36342853127664, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8482127593054575, 'testB_Haus': 98.50006136120456}
+Training Iter: [850/2000] Lr:0.002805 Total Loss:0.7186, Iter time:0.6201s Data loading time:0.0002s
+Training Iter: [900/2000] Lr:0.002711 Total Loss:0.8298, Iter time:0.9257s Data loading time:0.0002s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:09<02:59,  9.46s/it] 10%|█         | 2/20 [00:17<02:40,  8.89s/it] 15%|█▌        | 3/20 [00:44<04:47, 16.90s/it] 20%|██        | 4/20 [01:04<04:52, 18.28s/it] 25%|██▌       | 5/20 [01:19<04:13, 16.91s/it] 30%|███       | 6/20 [01:24<02:59, 12.85s/it] 35%|███▌      | 7/20 [01:36<02:44, 12.68s/it] 40%|████      | 8/20 [01:47<02:26, 12.23s/it] 45%|████▌     | 9/20 [01:54<01:55, 10.46s/it] 50%|█████     | 10/20 [02:02<01:38,  9.85s/it] 55%|█████▌    | 11/20 [02:16<01:38, 10.89s/it] 60%|██████    | 12/20 [02:28<01:29, 11.23s/it] 65%|██████▌   | 13/20 [02:34<01:08,  9.84s/it] 70%|███████   | 14/20 [02:41<00:53,  8.94s/it] 75%|███████▌  | 15/20 [02:46<00:39,  7.85s/it] 80%|████████  | 16/20 [02:53<00:29,  7.47s/it] 85%|████████▌ | 17/20 [02:59<00:20,  6.93s/it] 90%|█████████ | 18/20 [03:06<00:13,  6.94s/it] 95%|█████████▌| 19/20 [03:14<00:07,  7.29s/it]100%|██████████| 20/20 [03:24<00:00,  8.19s/it]100%|██████████| 20/20 [03:24<00:00, 10.23s/it]
+total: F1 0.8891037785284166, Dice:0.9032074877419474, Haus:50.196639193742215
+testA: F1 0.9261349741836147, Dice:0.9251633493801295, Haus:32.292603115191035
+testB: F1 0.7780101915628233, Dice:0.8373399028274013, Haus:103.90874742939552
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_899.pt
+deleting checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_399.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_total_Dice_0.9032_iter_899.pt
+deleting best checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_total_Dice_0.9029_iter_99.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_total_Haus_50.1966_iter_899.pt
+deleting best checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_total_Haus_52.3492_iter_199.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testA_F1_0.9261_iter_899.pt
+deleting best checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testA_F1_0.9233_iter_99.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testA_Dice_0.9252_iter_899.pt
+deleting best checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testA_Dice_0.9238_iter_99.pt
+saving best checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testA_Haus_32.2926_iter_899.pt
+deleting best checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/best_testA_Haus_32.3634_iter_99.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9032074877419474, 'total_Haus': 50.196639193742215, 'testA_F1': 0.9261349741836147, 'testA_Dice': 0.9251633493801295, 'testA_Haus': 32.292603115191035, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8482127593054575, 'testB_Haus': 98.50006136120456}
+Training Iter: [950/2000] Lr:0.002616 Total Loss:0.7984, Iter time:0.6826s Data loading time:0.0002s
+Training Iter: [1000/2000] Lr:0.002521 Total Loss:0.7255, Iter time:0.4535s Data loading time:0.0001s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:10<03:25, 10.83s/it] 10%|█         | 2/20 [00:17<02:31,  8.41s/it] 15%|█▌        | 3/20 [00:40<04:16, 15.07s/it] 20%|██        | 4/20 [01:02<04:43, 17.73s/it] 25%|██▌       | 5/20 [01:28<05:13, 20.93s/it] 30%|███       | 6/20 [01:33<03:36, 15.44s/it] 35%|███▌      | 7/20 [01:48<03:15, 15.07s/it] 40%|████      | 8/20 [01:59<02:47, 13.97s/it] 45%|████▌     | 9/20 [02:08<02:14, 12.27s/it] 50%|█████     | 10/20 [02:17<01:52, 11.23s/it] 55%|█████▌    | 11/20 [02:33<01:56, 12.94s/it] 60%|██████    | 12/20 [02:45<01:40, 12.55s/it] 65%|██████▌   | 13/20 [02:53<01:18, 11.15s/it] 70%|███████   | 14/20 [03:00<01:00, 10.05s/it] 75%|███████▌  | 15/20 [03:06<00:44,  8.80s/it] 80%|████████  | 16/20 [03:14<00:33,  8.43s/it] 85%|████████▌ | 17/20 [03:22<00:24,  8.25s/it] 90%|█████████ | 18/20 [03:29<00:15,  7.85s/it] 95%|█████████▌| 19/20 [03:37<00:08,  8.07s/it]100%|██████████| 20/20 [03:49<00:00,  9.25s/it]100%|██████████| 20/20 [03:49<00:00, 11.49s/it]
+total: F1 0.8728509194595148, Dice:0.8874932282144554, Haus:56.642347246481314
+testA: F1 0.9052723595882066, Dice:0.9060850195258757, Haus:38.5221450805273
+testB: F1 0.7755865990734412, Dice:0.8317178542801935, Haus:111.00295374434336
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_999.pt
+deleting checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_499.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9032074877419474, 'total_Haus': 50.196639193742215, 'testA_F1': 0.9261349741836147, 'testA_Dice': 0.9251633493801295, 'testA_Haus': 32.292603115191035, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8482127593054575, 'testB_Haus': 98.50006136120456}
+Training Iter: [1050/2000] Lr:0.002425 Total Loss:0.6336, Iter time:0.5594s Data loading time:0.0003s
+Training Iter: [1100/2000] Lr:0.002329 Total Loss:0.8655, Iter time:6.6568s Data loading time:5.9457s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:09<03:09, 10.00s/it] 10%|█         | 2/20 [00:18<02:40,  8.92s/it] 15%|█▌        | 3/20 [00:44<04:46, 16.86s/it] 20%|██        | 4/20 [01:05<04:53, 18.33s/it] 25%|██▌       | 5/20 [01:27<04:57, 19.82s/it] 30%|███       | 6/20 [01:32<03:26, 14.74s/it] 35%|███▌      | 7/20 [01:46<03:07, 14.40s/it] 40%|████      | 8/20 [01:57<02:41, 13.46s/it] 45%|████▌     | 9/20 [02:06<02:13, 12.11s/it] 50%|█████     | 10/20 [02:15<01:51, 11.15s/it] 55%|█████▌    | 11/20 [02:32<01:55, 12.82s/it] 60%|██████    | 12/20 [02:44<01:40, 12.57s/it] 65%|██████▌   | 13/20 [02:50<01:14, 10.69s/it] 70%|███████   | 14/20 [02:57<00:57,  9.52s/it] 75%|███████▌  | 15/20 [03:03<00:41,  8.33s/it] 80%|████████  | 16/20 [03:10<00:32,  8.17s/it] 85%|████████▌ | 17/20 [03:18<00:24,  8.12s/it] 90%|█████████ | 18/20 [03:25<00:15,  7.60s/it] 95%|█████████▌| 19/20 [03:33<00:07,  7.76s/it]100%|██████████| 20/20 [03:44<00:00,  8.78s/it]100%|██████████| 20/20 [03:44<00:00, 11.23s/it]
+total: F1 0.8752292362048959, Dice:0.8913329709003494, Haus:56.00014741387245
+testA: F1 0.9140914871906125, Dice:0.9140299110242107, Haus:36.889666383793
+testB: F1 0.7586424832477464, Dice:0.8232421505287657, Haus:113.33159050411075
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_1099.pt
+deleting checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_599.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9032074877419474, 'total_Haus': 50.196639193742215, 'testA_F1': 0.9261349741836147, 'testA_Dice': 0.9251633493801295, 'testA_Haus': 32.292603115191035, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8482127593054575, 'testB_Haus': 98.50006136120456}
+Training Iter: [1150/2000] Lr:0.002232 Total Loss:0.6097, Iter time:0.6008s Data loading time:0.0003s
+Training Iter: [1200/2000] Lr:0.002135 Total Loss:0.7831, Iter time:0.8498s Data loading time:0.0006s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:09<03:04,  9.70s/it] 10%|█         | 2/20 [00:16<02:25,  8.11s/it] 15%|█▌        | 3/20 [00:41<04:24, 15.56s/it] 20%|██        | 4/20 [00:57<04:15, 15.99s/it] 25%|██▌       | 5/20 [01:19<04:31, 18.07s/it] 30%|███       | 6/20 [01:23<03:07, 13.38s/it] 35%|███▌      | 7/20 [01:36<02:50, 13.12s/it] 40%|████      | 8/20 [01:47<02:28, 12.35s/it] 45%|████▌     | 9/20 [01:54<01:58, 10.73s/it] 50%|█████     | 10/20 [02:01<01:36,  9.63s/it] 55%|█████▌    | 11/20 [02:14<01:36, 10.75s/it] 60%|██████    | 12/20 [02:25<01:26, 10.87s/it] 65%|██████▌   | 13/20 [02:33<01:09,  9.87s/it] 70%|███████   | 14/20 [02:40<00:54,  9.07s/it] 75%|███████▌  | 15/20 [02:45<00:38,  7.79s/it] 80%|████████  | 16/20 [02:54<00:32,  8.21s/it] 85%|████████▌ | 17/20 [03:03<00:25,  8.52s/it] 90%|█████████ | 18/20 [03:10<00:15,  7.81s/it] 95%|█████████▌| 19/20 [03:18<00:08,  8.04s/it]100%|██████████| 20/20 [03:31<00:00,  9.38s/it]100%|██████████| 20/20 [03:31<00:00, 10.56s/it]
+total: F1 0.8720467995467827, Dice:0.8930654909732707, Haus:54.814629734275016
+testA: F1 0.9122768306759313, Dice:0.9144288458389211, Haus:35.74585480719945
+testB: F1 0.7513567061593378, Dice:0.8289754263763192, Haus:112.0209545155017
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_1199.pt
+deleting checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_699.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9032074877419474, 'total_Haus': 50.196639193742215, 'testA_F1': 0.9261349741836147, 'testA_Dice': 0.9251633493801295, 'testA_Haus': 32.292603115191035, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8482127593054575, 'testB_Haus': 98.50006136120456}
+Training Iter: [1250/2000] Lr:0.002037 Total Loss:0.6437, Iter time:0.6080s Data loading time:0.0003s
+Training Iter: [1300/2000] Lr:0.001939 Total Loss:0.6812, Iter time:0.6423s Data loading time:0.0002s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:10<03:25, 10.83s/it] 10%|█         | 2/20 [00:18<02:45,  9.20s/it] 15%|█▌        | 3/20 [00:53<05:52, 20.75s/it] 20%|██        | 4/20 [01:15<05:38, 21.18s/it] 25%|██▌       | 5/20 [01:34<05:08, 20.55s/it] 30%|███       | 6/20 [01:39<03:33, 15.26s/it] 35%|███▌      | 7/20 [01:57<03:29, 16.12s/it] 40%|████      | 8/20 [02:05<02:43, 13.61s/it] 45%|████▌     | 9/20 [02:13<02:10, 11.91s/it] 50%|█████     | 10/20 [02:21<01:46, 10.64s/it] 55%|█████▌    | 11/20 [02:37<01:50, 12.28s/it] 60%|██████    | 12/20 [02:49<01:36, 12.04s/it] 65%|██████▌   | 13/20 [03:01<01:23, 12.00s/it] 70%|███████   | 14/20 [03:08<01:03, 10.64s/it] 75%|███████▌  | 15/20 [03:14<00:45,  9.06s/it] 80%|████████  | 16/20 [03:20<00:33,  8.37s/it] 85%|████████▌ | 17/20 [03:28<00:24,  8.09s/it] 90%|█████████ | 18/20 [03:35<00:15,  7.89s/it] 95%|█████████▌| 19/20 [03:45<00:08,  8.33s/it]100%|██████████| 20/20 [04:03<00:00, 11.23s/it]100%|██████████| 20/20 [04:03<00:00, 12.15s/it]
+total: F1 0.8834974991690501, Dice:0.8974123700096548, Haus:53.01993901964189
+testA: F1 0.9189441422879445, Dice:0.9170593398823361, Haus:35.25975943785681
+testB: F1 0.7771575698123686, Dice:0.8384714603916095, Haus:106.30047776499717
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_1299.pt
+deleting checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_799.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9032074877419474, 'total_Haus': 50.196639193742215, 'testA_F1': 0.9261349741836147, 'testA_Dice': 0.9251633493801295, 'testA_Haus': 32.292603115191035, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8482127593054575, 'testB_Haus': 98.50006136120456}
+Training Iter: [1350/2000] Lr:0.001839 Total Loss:0.8258, Iter time:0.6165s Data loading time:0.0002s
+Training Iter: [1400/2000] Lr:0.001739 Total Loss:0.6809, Iter time:0.7976s Data loading time:0.0002s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:11<03:33, 11.24s/it] 10%|█         | 2/20 [00:17<02:27,  8.22s/it] 15%|█▌        | 3/20 [00:35<03:34, 12.64s/it] 20%|██        | 4/20 [00:58<04:28, 16.78s/it] 25%|██▌       | 5/20 [01:19<04:34, 18.32s/it] 30%|███       | 6/20 [01:24<03:12, 13.77s/it] 35%|███▌      | 7/20 [01:38<03:01, 13.94s/it] 40%|████      | 8/20 [01:46<02:24, 12.01s/it] 45%|████▌     | 9/20 [01:53<01:56, 10.57s/it] 50%|█████     | 10/20 [02:02<01:38,  9.83s/it] 55%|█████▌    | 11/20 [02:19<01:49, 12.13s/it] 60%|██████    | 12/20 [02:30<01:35, 11.90s/it] 65%|██████▌   | 13/20 [02:37<01:12, 10.36s/it] 70%|███████   | 14/20 [02:46<00:59,  9.84s/it] 75%|███████▌  | 15/20 [02:51<00:42,  8.56s/it] 80%|████████  | 16/20 [03:03<00:37,  9.40s/it] 85%|████████▌ | 17/20 [03:10<00:26,  8.75s/it] 90%|█████████ | 18/20 [03:17<00:16,  8.18s/it] 95%|█████████▌| 19/20 [03:26<00:08,  8.34s/it]100%|██████████| 20/20 [03:40<00:00, 10.11s/it]100%|██████████| 20/20 [03:40<00:00, 11.01s/it]
+total: F1 0.8818022355559141, Dice:0.8983166587392442, Haus:52.42525030412156
+testA: F1 0.9184665151600166, Dice:0.9190467798507024, Haus:32.85744274240592
+testB: F1 0.7718093967436073, Dice:0.8361262954048678, Haus:111.1286729892685
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_1399.pt
+deleting checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_899.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9032074877419474, 'total_Haus': 50.196639193742215, 'testA_F1': 0.9261349741836147, 'testA_Dice': 0.9251633493801295, 'testA_Haus': 32.292603115191035, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8482127593054575, 'testB_Haus': 98.50006136120456}
+Training Iter: [1450/2000] Lr:0.001638 Total Loss:0.6028, Iter time:0.5760s Data loading time:0.0023s
+Training Iter: [1500/2000] Lr:0.001537 Total Loss:0.8208, Iter time:1.1872s Data loading time:0.0002s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:12<04:03, 12.82s/it] 10%|█         | 2/20 [00:20<02:58,  9.92s/it] 15%|█▌        | 3/20 [00:47<05:03, 17.84s/it] 20%|██        | 4/20 [01:37<08:05, 30.32s/it] 25%|██▌       | 5/20 [01:59<06:51, 27.41s/it] 30%|███       | 6/20 [02:05<04:38, 19.91s/it] 35%|███▌      | 7/20 [02:16<03:44, 17.30s/it] 40%|████      | 8/20 [02:29<03:07, 15.65s/it] 45%|████▌     | 9/20 [02:36<02:24, 13.13s/it] 50%|█████     | 10/20 [02:44<01:54, 11.44s/it] 55%|█████▌    | 11/20 [03:00<01:55, 12.87s/it] 60%|██████    | 12/20 [03:13<01:43, 12.88s/it] 65%|██████▌   | 13/20 [03:21<01:19, 11.38s/it] 70%|███████   | 14/20 [03:29<01:02, 10.45s/it] 75%|███████▌  | 15/20 [03:35<00:45,  9.02s/it] 80%|████████  | 16/20 [03:46<00:38,  9.67s/it] 85%|████████▌ | 17/20 [03:54<00:27,  9.09s/it] 90%|█████████ | 18/20 [04:00<00:16,  8.36s/it] 95%|█████████▌| 19/20 [04:10<00:08,  8.86s/it]100%|██████████| 20/20 [04:24<00:00, 10.21s/it]100%|██████████| 20/20 [04:24<00:00, 13.21s/it]
+total: F1 0.8789090238264711, Dice:0.8949049955645677, Haus:55.390343998243495
+testA: F1 0.9157444605827911, Dice:0.9153301651019354, Haus:36.35168871441481
+testB: F1 0.7684027135575123, Dice:0.8336294869524637, Haus:112.5063098497296
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_1499.pt
+deleting checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_999.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9032074877419474, 'total_Haus': 50.196639193742215, 'testA_F1': 0.9261349741836147, 'testA_Dice': 0.9251633493801295, 'testA_Haus': 32.292603115191035, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8482127593054575, 'testB_Haus': 98.50006136120456}
+Training Iter: [1550/2000] Lr:0.001434 Total Loss:0.5740, Iter time:3.4741s Data loading time:2.8793s
+Training Iter: [1600/2000] Lr:0.001330 Total Loss:0.6431, Iter time:0.6457s Data loading time:0.0002s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:13<04:10, 13.21s/it] 10%|█         | 2/20 [00:20<02:54,  9.72s/it] 15%|█▌        | 3/20 [00:52<05:34, 19.68s/it] 20%|██        | 4/20 [01:17<05:48, 21.78s/it] 25%|██▌       | 5/20 [01:35<05:10, 20.67s/it] 30%|███       | 6/20 [01:41<03:37, 15.53s/it] 35%|███▌      | 7/20 [01:54<03:11, 14.70s/it] 40%|████      | 8/20 [02:06<02:45, 13.81s/it] 45%|████▌     | 9/20 [02:13<02:11, 11.93s/it] 50%|█████     | 10/20 [02:23<01:51, 11.12s/it] 55%|█████▌    | 11/20 [02:40<01:57, 13.07s/it] 60%|██████    | 12/20 [02:53<01:44, 13.04s/it] 65%|██████▌   | 13/20 [03:00<01:18, 11.20s/it] 70%|███████   | 14/20 [03:08<01:00, 10.16s/it] 75%|███████▌  | 15/20 [03:14<00:44,  8.90s/it] 80%|████████  | 16/20 [03:27<00:40, 10.09s/it] 85%|████████▌ | 17/20 [03:34<00:27,  9.31s/it] 90%|█████████ | 18/20 [03:41<00:16,  8.50s/it] 95%|█████████▌| 19/20 [03:50<00:08,  8.81s/it]100%|██████████| 20/20 [04:06<00:00, 10.89s/it]100%|██████████| 20/20 [04:06<00:00, 12.33s/it]
+total: F1 0.8771973392840285, Dice:0.8939652677436204, Haus:53.605038023384076
+testA: F1 0.9046186670061832, Dice:0.9143487155546873, Haus:33.7938519097722
+testB: F1 0.7949333561175667, Dice:0.8328149243104195, Haus:113.03859636421967
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_1599.pt
+deleting checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_1099.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9032074877419474, 'total_Haus': 50.196639193742215, 'testA_F1': 0.9261349741836147, 'testA_Dice': 0.9251633493801295, 'testA_Haus': 32.292603115191035, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8482127593054575, 'testB_Haus': 98.50006136120456}
+Training Iter: [1650/2000] Lr:0.001225 Total Loss:0.6803, Iter time:0.8253s Data loading time:0.0002s
+Training Iter: [1700/2000] Lr:0.001118 Total Loss:0.6135, Iter time:0.6338s Data loading time:0.0002s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:12<04:01, 12.71s/it] 10%|█         | 2/20 [00:22<03:12, 10.71s/it] 15%|█▌        | 3/20 [01:08<07:38, 26.97s/it] 20%|██        | 4/20 [01:26<06:14, 23.38s/it] 25%|██▌       | 5/20 [01:42<05:14, 20.94s/it] 30%|███       | 6/20 [01:48<03:38, 15.60s/it] 35%|███▌      | 7/20 [02:01<03:14, 14.94s/it] 40%|████      | 8/20 [02:12<02:45, 13.76s/it] 45%|████▌     | 9/20 [02:19<02:07, 11.58s/it] 50%|█████     | 10/20 [02:28<01:46, 10.67s/it] 55%|█████▌    | 11/20 [02:43<01:49, 12.20s/it] 60%|██████    | 12/20 [02:55<01:37, 12.14s/it] 65%|██████▌   | 13/20 [03:03<01:14, 10.63s/it] 70%|███████   | 14/20 [03:10<00:57,  9.61s/it] 75%|███████▌  | 15/20 [03:15<00:40,  8.18s/it] 80%|████████  | 16/20 [03:26<00:36,  9.19s/it] 85%|████████▌ | 17/20 [03:33<00:25,  8.55s/it] 90%|█████████ | 18/20 [03:40<00:16,  8.07s/it] 95%|█████████▌| 19/20 [03:49<00:08,  8.32s/it]100%|██████████| 20/20 [04:02<00:00,  9.73s/it]100%|██████████| 20/20 [04:02<00:00, 12.14s/it]
+total: F1 0.8838394452812051, Dice:0.8959820645264951, Haus:53.64633738799504
+testA: F1 0.915550510411454, Dice:0.9165598402184575, Haus:35.21991271016745
+testB: F1 0.7887062498904605, Dice:0.8342487374506092, Haus:108.92561142147781
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_1699.pt
+deleting checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_1199.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9032074877419474, 'total_Haus': 50.196639193742215, 'testA_F1': 0.9261349741836147, 'testA_Dice': 0.9251633493801295, 'testA_Haus': 32.292603115191035, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8482127593054575, 'testB_Haus': 98.50006136120456}
+Training Iter: [1750/2000] Lr:0.001009 Total Loss:0.6175, Iter time:3.8846s Data loading time:3.0874s
+Training Iter: [1800/2000] Lr:0.000898 Total Loss:0.5993, Iter time:0.7414s Data loading time:0.0002s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:11<03:45, 11.85s/it] 10%|█         | 2/20 [00:19<02:48,  9.36s/it] 15%|█▌        | 3/20 [00:55<06:09, 21.71s/it] 20%|██        | 4/20 [01:16<05:43, 21.46s/it] 25%|██▌       | 5/20 [01:34<04:59, 19.99s/it] 30%|███       | 6/20 [01:39<03:29, 14.99s/it] 35%|███▌      | 7/20 [01:50<02:58, 13.74s/it] 40%|████      | 8/20 [02:05<02:47, 13.92s/it] 45%|████▌     | 9/20 [02:13<02:14, 12.26s/it] 50%|█████     | 10/20 [02:24<01:58, 11.84s/it] 55%|█████▌    | 11/20 [02:41<01:59, 13.27s/it] 60%|██████    | 12/20 [02:53<01:43, 12.93s/it] 65%|██████▌   | 13/20 [03:00<01:18, 11.22s/it] 70%|███████   | 14/20 [03:08<01:00, 10.14s/it] 75%|███████▌  | 15/20 [03:14<00:44,  9.00s/it] 80%|████████  | 16/20 [03:25<00:38,  9.70s/it] 85%|████████▌ | 17/20 [03:32<00:26,  8.91s/it] 90%|█████████ | 18/20 [03:39<00:16,  8.12s/it] 95%|█████████▌| 19/20 [03:47<00:08,  8.30s/it]100%|██████████| 20/20 [03:59<00:00,  9.36s/it]100%|██████████| 20/20 [03:59<00:00, 11.99s/it]
+total: F1 0.8736864401277152, Dice:0.8919379337421454, Haus:55.50061758215247
+testA: F1 0.907675563369194, Dice:0.9103266246445045, Haus:37.75355055222227
+testB: F1 0.771719070403281, Dice:0.8367718610350672, Haus:108.74181867194307
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_1799.pt
+deleting checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_1299.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9032074877419474, 'total_Haus': 50.196639193742215, 'testA_F1': 0.9261349741836147, 'testA_Dice': 0.9251633493801295, 'testA_Haus': 32.292603115191035, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8482127593054575, 'testB_Haus': 98.50006136120456}
+Training Iter: [1850/2000] Lr:0.000785 Total Loss:0.6895, Iter time:0.5382s Data loading time:0.0003s
+Training Iter: [1900/2000] Lr:0.000667 Total Loss:0.6440, Iter time:11.8358s Data loading time:11.1120s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:11<03:34, 11.31s/it] 10%|█         | 2/20 [00:19<02:46,  9.24s/it] 15%|█▌        | 3/20 [00:59<06:41, 23.63s/it] 20%|██        | 4/20 [01:25<06:30, 24.42s/it] 25%|██▌       | 5/20 [01:43<05:32, 22.15s/it] 30%|███       | 6/20 [01:49<03:53, 16.69s/it] 35%|███▌      | 7/20 [02:04<03:27, 15.97s/it] 40%|████      | 8/20 [02:16<02:56, 14.73s/it] 45%|████▌     | 9/20 [02:24<02:18, 12.60s/it] 50%|█████     | 10/20 [02:34<01:57, 11.76s/it] 55%|█████▌    | 11/20 [02:50<01:57, 13.09s/it] 60%|██████    | 12/20 [03:02<01:42, 12.87s/it] 65%|██████▌   | 13/20 [03:09<01:16, 10.94s/it] 70%|███████   | 14/20 [03:16<00:58,  9.80s/it] 75%|███████▌  | 15/20 [03:21<00:42,  8.45s/it] 80%|████████  | 16/20 [03:27<00:30,  7.71s/it] 85%|████████▌ | 17/20 [03:34<00:22,  7.44s/it] 90%|█████████ | 18/20 [03:40<00:14,  7.15s/it] 95%|█████████▌| 19/20 [03:48<00:07,  7.30s/it]100%|██████████| 20/20 [03:59<00:00,  8.49s/it]100%|██████████| 20/20 [03:59<00:00, 11.99s/it]
+total: F1 0.8843237931880191, Dice:0.8974220194841227, Haus:53.83891208780069
+testA: F1 0.9219973420980441, Dice:0.9176363932431989, Haus:34.98807697021042
+testB: F1 0.7713031464579453, Dice:0.8367788982068933, Haus:110.39141744057153
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_1899.pt
+deleting checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_1399.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9032074877419474, 'total_Haus': 50.196639193742215, 'testA_F1': 0.9261349741836147, 'testA_Dice': 0.9251633493801295, 'testA_Haus': 32.292603115191035, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8482127593054575, 'testB_Haus': 98.50006136120456}
+Training Iter: [1950/2000] Lr:0.000543 Total Loss:0.6593, Iter time:1.3533s Data loading time:0.7762s
+Training Iter: [2000/2000] Lr:0.000400 Total Loss:0.6588, Iter time:4.2667s Data loading time:3.4003s
+evaluating.........
+  0%|          | 0/20 [00:00<?, ?it/s]  5%|▌         | 1/20 [00:11<03:31, 11.11s/it] 10%|█         | 2/20 [00:19<02:48,  9.35s/it] 15%|█▌        | 3/20 [00:46<04:54, 17.32s/it] 20%|██        | 4/20 [01:08<05:08, 19.29s/it] 25%|██▌       | 5/20 [01:31<05:08, 20.54s/it] 30%|███       | 6/20 [01:36<03:33, 15.28s/it] 35%|███▌      | 7/20 [01:52<03:24, 15.76s/it] 40%|████      | 8/20 [02:01<02:43, 13.61s/it] 45%|████▌     | 9/20 [02:09<02:07, 11.58s/it] 50%|█████     | 10/20 [02:18<01:49, 10.92s/it] 55%|█████▌    | 11/20 [02:35<01:56, 12.89s/it] 60%|██████    | 12/20 [02:48<01:43, 12.89s/it] 65%|██████▌   | 13/20 [02:58<01:22, 11.80s/it] 70%|███████   | 14/20 [03:05<01:02, 10.42s/it] 75%|███████▌  | 15/20 [03:11<00:45,  9.04s/it] 80%|████████  | 16/20 [03:18<00:33,  8.43s/it] 85%|████████▌ | 17/20 [03:24<00:23,  7.93s/it] 90%|█████████ | 18/20 [03:31<00:15,  7.50s/it] 95%|█████████▌| 19/20 [03:40<00:07,  7.88s/it]100%|██████████| 20/20 [03:53<00:00,  9.61s/it]100%|██████████| 20/20 [03:53<00:00, 11.69s/it]
+total: F1 0.8793197756031562, Dice:0.8940399622734116, Haus:55.501073097542374
+testA: F1 0.9176530073027785, Dice:0.9133730435677265, Haus:37.461934933349895
+testB: F1 0.7643200805042911, Dice:0.8360407183904683, Haus:109.61848759011983
+saving checkpoint file to /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_1999.pt
+deleting checkpoint file /data/ssd1/xuxinan/mm/checkpoints/unet_branch_SGD_473_Saturday_04_January_2025_20h_40m_43s/iter_1499.pt
+best value: {'total_F1': 0.8960975358134338, 'total_Dice': 0.9032074877419474, 'total_Haus': 50.196639193742215, 'testA_F1': 0.9261349741836147, 'testA_Dice': 0.9251633493801295, 'testA_Haus': 32.292603115191035, 'testB_F1': 0.8146088685136672, 'testB_Dice': 0.8482127593054575, 'testB_Haus': 98.50006136120456}
